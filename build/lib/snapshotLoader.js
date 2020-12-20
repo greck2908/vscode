@@ -24,7 +24,6 @@ var snaps;
         case 'linux':
             loaderFilepath = `VSCode-${process.platform}-${arch}/resources/app/out/vs/loader.js`;
             startupBlobFilepath = `VSCode-${process.platform}-${arch}/snapshot_blob.bin`;
-            break;
         default:
             throw new Error('Unknown platform');
     }

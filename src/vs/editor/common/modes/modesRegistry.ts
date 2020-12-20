@@ -4,12 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { Emitter, Event } from 'vs/base/common/event';
-import { LanguageId, LanguageIdentifier } from 'vs/editor/common/modes';
-import { LanguageConfigurationRegistry } from 'vs/editor/common/modes/languageConfigurationRegistry';
-import { ILanguageExtensionPoint } from 'vs/editor/common/services/modeService';
+import { Event, Emitter } from 'vs/base/common/event';
 import { Registry } from 'vs/platform/registry/common/platform';
-import { IDisposable } from 'vs/base/common/lifecycle';
+import { ILanguageExtensionPoint } from 'vs/editor/common/services/modeService';
+import { LanguageConfigurationRegistry } from 'vs/editor/common/modes/languageConfigurationRegistry';
+import { LanguageIdentifier, LanguageId } from 'vs/editor/common/modes';
 
 // Define extension point ids
 export const Extensions = {
@@ -18,39 +17,27 @@ export const Extensions = {
 
 export class EditorModesRegistry {
 
-	private readonly _languages: ILanguageExtensionPoint[];
-	private _dynamicLanguages: ILanguageExtensionPoint[];
+	private _languages: ILanguageExtensionPoint[];
 
-	private readonly _onDidChangeLanguages = new Emitter<void>();
-	public readonly onDidChangeLanguages: Event<void> = this._onDidChangeLanguages.event;
+	private readonly _onDidAddLanguages: Emitter<ILanguageExtensionPoint[]> = new Emitter<ILanguageExtensionPoint[]>();
+	public readonly onDidAddLanguages: Event<ILanguageExtensionPoint[]> = this._onDidAddLanguages.event;
 
 	constructor() {
 		this._languages = [];
-		this._dynamicLanguages = [];
 	}
 
 	// --- languages
 
-	public registerLanguage(def: ILanguageExtensionPoint): IDisposable {
+	public registerLanguage(def: ILanguageExtensionPoint): void {
 		this._languages.push(def);
-		this._onDidChangeLanguages.fire(undefined);
-		return {
-			dispose: () => {
-				for (let i = 0, len = this._languages.length; i < len; i++) {
-					if (this._languages[i] === def) {
-						this._languages.splice(i, 1);
-						return;
-					}
-				}
-			}
-		};
+		this._onDidAddLanguages.fire([def]);
 	}
-	public setDynamicLanguages(def: ILanguageExtensionPoint[]): void {
-		this._dynamicLanguages = def;
-		this._onDidChangeLanguages.fire(undefined);
+	public registerLanguages(def: ILanguageExtensionPoint[]): void {
+		this._languages = this._languages.concat(def);
+		this._onDidAddLanguages.fire(def);
 	}
 	public getLanguages(): ILanguageExtensionPoint[] {
-		return (<ILanguageExtensionPoint[]>[]).concat(this._languages).concat(this._dynamicLanguages);
+		return this._languages.slice(0);
 	}
 }
 
@@ -62,7 +49,7 @@ export const PLAINTEXT_LANGUAGE_IDENTIFIER = new LanguageIdentifier(PLAINTEXT_MO
 
 ModesRegistry.registerLanguage({
 	id: PLAINTEXT_MODE_ID,
-	extensions: ['.txt'],
+	extensions: ['.txt', '.gitignore'],
 	aliases: [nls.localize('plainText.alias', "Plain Text"), 'text'],
 	mimetypes: ['text/plain']
 });
@@ -71,17 +58,5 @@ LanguageConfigurationRegistry.register(PLAINTEXT_LANGUAGE_IDENTIFIER, {
 		['(', ')'],
 		['[', ']'],
 		['{', '}'],
-	],
-	surroundingPairs: [
-		{ open: '{', close: '}' },
-		{ open: '[', close: ']' },
-		{ open: '(', close: ')' },
-		{ open: '<', close: '>' },
-		{ open: '\"', close: '\"' },
-		{ open: '\'', close: '\'' },
-		{ open: '`', close: '`' },
-	],
-	folding: {
-		offSide: true
-	}
+	]
 });

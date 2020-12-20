@@ -4,9 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getLocation, Location, parse } from 'jsonc-parser';
+import { getLocation, Location } from 'jsonc-parser';
 import * as nls from 'vscode-nls';
-import { provideInstalledExtensionProposals } from './extensionsProposals';
 
 const localize = nls.loadMessageBundle();
 
@@ -14,7 +13,7 @@ export class SettingsDocument {
 
 	constructor(private document: vscode.TextDocument) { }
 
-	public provideCompletionItems(position: vscode.Position, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList> {
+	public provideCompletionItems(position: vscode.Position, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem[]> {
 		const location = getLocation(this.document.getText(), this.document.offsetAt(position));
 		const range = this.document.getWordRangeAtPosition(position) || new vscode.Range(position, position);
 
@@ -35,29 +34,7 @@ export class SettingsDocument {
 
 		// files.defaultLanguage
 		if (location.path[0] === 'files.defaultLanguage') {
-			return this.provideLanguageCompletionItems(location, range).then(items => {
-
-				// Add special item '${activeEditorLanguage}'
-				return [this.newSimpleCompletionItem(JSON.stringify('${activeEditorLanguage}'), range, localize('activeEditor', "Use the language of the currently active text editor if any")), ...items];
-			});
-		}
-
-		// settingsSync.ignoredExtensions
-		if (location.path[0] === 'settingsSync.ignoredExtensions') {
-			let ignoredExtensions = [];
-			try {
-				ignoredExtensions = parse(this.document.getText())['settingsSync.ignoredExtensions'];
-			} catch (e) {/* ignore error */ }
-			return provideInstalledExtensionProposals(ignoredExtensions, '', range, true);
-		}
-
-		// remote.extensionKind
-		if (location.path[0] === 'remote.extensionKind' && location.path.length === 2 && location.isAtPropertyKey) {
-			let alreadyConfigured: string[] = [];
-			try {
-				alreadyConfigured = Object.keys(parse(this.document.getText())['remote.extensionKind']);
-			} catch (e) {/* ignore error */ }
-			return provideInstalledExtensionProposals(alreadyConfigured, `: [\n\t"ui"\n]`, range, true);
+			return this.provideLanguageCompletionItems(location, range);
 		}
 
 		return this.provideLanguageOverridesCompletionItems(location, position);
@@ -67,17 +44,13 @@ export class SettingsDocument {
 		const completions: vscode.CompletionItem[] = [];
 
 		completions.push(this.newSimpleCompletionItem('${activeEditorShort}', range, localize('activeEditorShort', "the file name (e.g. myFile.txt)")));
-		completions.push(this.newSimpleCompletionItem('${activeEditorMedium}', range, localize('activeEditorMedium', "the path of the file relative to the workspace folder (e.g. myFolder/myFileFolder/myFile.txt)")));
-		completions.push(this.newSimpleCompletionItem('${activeEditorLong}', range, localize('activeEditorLong', "the full path of the file (e.g. /Users/Development/myFolder/myFileFolder/myFile.txt)")));
-		completions.push(this.newSimpleCompletionItem('${activeFolderShort}', range, localize('activeFolderShort', "the name of the folder the file is contained in (e.g. myFileFolder)")));
-		completions.push(this.newSimpleCompletionItem('${activeFolderMedium}', range, localize('activeFolderMedium', "the path of the folder the file is contained in, relative to the workspace folder (e.g. myFolder/myFileFolder)")));
-		completions.push(this.newSimpleCompletionItem('${activeFolderLong}', range, localize('activeFolderLong', "the full path of the folder the file is contained in (e.g. /Users/Development/myFolder/myFileFolder)")));
+		completions.push(this.newSimpleCompletionItem('${activeEditorMedium}', range, localize('activeEditorMedium', "the path of the file relative to the workspace folder (e.g. myFolder/myFile.txt)")));
+		completions.push(this.newSimpleCompletionItem('${activeEditorLong}', range, localize('activeEditorLong', "the full path of the file (e.g. /Users/Development/myProject/myFolder/myFile.txt)")));
 		completions.push(this.newSimpleCompletionItem('${rootName}', range, localize('rootName', "name of the workspace (e.g. myFolder or myWorkspace)")));
 		completions.push(this.newSimpleCompletionItem('${rootPath}', range, localize('rootPath', "file path of the workspace (e.g. /Users/Development/myWorkspace)")));
 		completions.push(this.newSimpleCompletionItem('${folderName}', range, localize('folderName', "name of the workspace folder the file is contained in (e.g. myFolder)")));
 		completions.push(this.newSimpleCompletionItem('${folderPath}', range, localize('folderPath', "file path of the workspace folder the file is contained in (e.g. /Users/Development/myFolder)")));
 		completions.push(this.newSimpleCompletionItem('${appName}', range, localize('appName', "e.g. VS Code")));
-		completions.push(this.newSimpleCompletionItem('${remoteName}', range, localize('remoteName', "e.g. SSH")));
 		completions.push(this.newSimpleCompletionItem('${dirty}', range, localize('dirty', "a dirty indicator if the active editor is dirty")));
 		completions.push(this.newSimpleCompletionItem('${separator}', range, localize('separator', "a conditional separator (' - ') that only shows when surrounded by variables with values")));
 
@@ -105,7 +78,7 @@ export class SettingsDocument {
 				}));
 			} else {
 				// Value
-				return this.provideLanguageCompletionItemsForLanguageOverrides(location, range);
+				return this.provideLanguageCompletionItems(location, range);
 			}
 		}
 
@@ -176,12 +149,7 @@ export class SettingsDocument {
 		return Promise.resolve(completions);
 	}
 
-	private provideLanguageCompletionItems(_location: Location, range: vscode.Range, formatFunc: (string: string) => string = (l) => JSON.stringify(l)): Thenable<vscode.CompletionItem[]> {
-		return vscode.languages.getLanguages()
-			.then(languages => languages.map(l => this.newSimpleCompletionItem(formatFunc(l), range)));
-	}
-
-	private provideLanguageCompletionItemsForLanguageOverrides(_location: Location, range: vscode.Range, formatFunc: (string: string) => string = (l) => JSON.stringify(l)): Thenable<vscode.CompletionItem[]> {
+	private provideLanguageCompletionItems(_location: Location, range: vscode.Range, formatFunc: (string: string) => string = (l) => JSON.stringify(l)): vscode.ProviderResult<vscode.CompletionItem[]> {
 		return vscode.languages.getLanguages().then(languages => {
 			const completionItems = [];
 			const configuration = vscode.workspace.getConfiguration();
@@ -206,7 +174,7 @@ export class SettingsDocument {
 			let text = this.document.getText(range);
 			if (text && text.trim().startsWith('[')) {
 				range = new vscode.Range(new vscode.Position(range.start.line, range.start.character + text.indexOf('[')), range.end);
-				return this.provideLanguageCompletionItemsForLanguageOverrides(location, range, language => `"[${language}]"`);
+				return this.provideLanguageCompletionItems(location, range, language => `"[${language}]"`);
 			}
 
 			range = this.document.getWordRangeAtPosition(position) || new vscode.Range(position, position);
@@ -232,8 +200,8 @@ export class SettingsDocument {
 		if (location.path.length === 1 && location.previousNode && typeof location.previousNode.value === 'string' && location.previousNode.value.startsWith('[')) {
 			// Suggestion model word matching includes closed sqaure bracket and ending quote
 			// Hence include them in the proposal to replace
-			const range = this.document.getWordRangeAtPosition(position) || new vscode.Range(position, position);
-			return this.provideLanguageCompletionItemsForLanguageOverrides(location, range, language => `"[${language}]"`);
+			let range = this.document.getWordRangeAtPosition(position) || new vscode.Range(position, position);
+			return this.provideLanguageCompletionItems(location, range, language => `"[${language}]"`);
 		}
 		return Promise.resolve([]);
 	}

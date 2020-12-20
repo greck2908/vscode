@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { validate, getEmmetMode, getEmmetConfiguration, toLSTextDocument, getHtmlNodeLS, offsetRangeToVsRange } from './util';
-import { Node as LSNode, TextDocument as LSTextDocument } from 'vscode-html-languageservice';
+import { HtmlNode } from 'EmmetNode';
+import { getHtmlNode, parseDocument, validate, getEmmetMode, getEmmetConfiguration } from './util';
 
 export function splitJoinTag() {
 	if (!validate(false) || !vscode.window.activeTextEditor) {
@@ -13,42 +13,40 @@ export function splitJoinTag() {
 	}
 
 	const editor = vscode.window.activeTextEditor;
-	const document = toLSTextDocument(editor.document);
+	let rootNode = <HtmlNode>parseDocument(editor.document);
+	if (!rootNode) {
+		return;
+	}
+
 	return editor.edit(editBuilder => {
 		editor.selections.reverse().forEach(selection => {
-			const nodeToUpdate = getHtmlNodeLS(document, selection.start, true);
+			let nodeToUpdate = getHtmlNode(editor.document, rootNode, selection.start, true);
 			if (nodeToUpdate) {
-				const textEdit = getRangesToReplace(document, nodeToUpdate);
-				if (textEdit) {
-					editBuilder.replace(textEdit.range, textEdit.newText);
-				}
+				let textEdit = getRangesToReplace(editor.document, nodeToUpdate);
+				editBuilder.replace(textEdit.range, textEdit.newText);
 			}
 		});
 	});
 }
 
-function getRangesToReplace(document: LSTextDocument, nodeToUpdate: LSNode): vscode.TextEdit | undefined {
+function getRangesToReplace(document: vscode.TextDocument, nodeToUpdate: HtmlNode): vscode.TextEdit {
 	let rangeToReplace: vscode.Range;
 	let textToReplaceWith: string;
 
-	if (!nodeToUpdate?.tag) {
-		return;
-	}
-
-	if (nodeToUpdate.endTagStart === undefined || nodeToUpdate.startTagEnd === undefined) {
+	if (!nodeToUpdate.close) {
 		// Split Tag
-		const nodeText = document.getText().substring(nodeToUpdate.start, nodeToUpdate.end);
-		const m = nodeText.match(/(\s*\/)?>$/);
-		const end = nodeToUpdate.end;
-		const start = m ? end - m[0].length : end;
+		let nodeText = document.getText(new vscode.Range(nodeToUpdate.start, nodeToUpdate.end));
+		let m = nodeText.match(/(\s*\/)?>$/);
+		let end = <vscode.Position>nodeToUpdate.end;
+		let start = m ? end.translate(0, -m[0].length) : end;
 
-		rangeToReplace = offsetRangeToVsRange(document, start, end);
-		textToReplaceWith = `></${nodeToUpdate.tag}>`;
+		rangeToReplace = new vscode.Range(start, end);
+		textToReplaceWith = `></${nodeToUpdate.name}>`;
 	} else {
 		// Join Tag
-		const start = nodeToUpdate.startTagEnd - 1;
-		const end = nodeToUpdate.end;
-		rangeToReplace = offsetRangeToVsRange(document, start, end);
+		let start = (<vscode.Position>nodeToUpdate.open.end).translate(0, -1);
+		let end = <vscode.Position>nodeToUpdate.end;
+		rangeToReplace = new vscode.Range(start, end);
 		textToReplaceWith = '/>';
 
 		const emmetMode = getEmmetMode(document.languageId, []) || '';
@@ -57,6 +55,7 @@ function getRangesToReplace(document: LSTextDocument, nodeToUpdate: LSNode): vsc
 			(emmetConfig.syntaxProfiles[emmetMode]['selfClosingStyle'] === 'xhtml' || emmetConfig.syntaxProfiles[emmetMode]['self_closing_tag'] === 'xhtml')) {
 			textToReplaceWith = ' ' + textToReplaceWith;
 		}
+
 	}
 
 	return new vscode.TextEdit(rangeToReplace, textToReplaceWith);

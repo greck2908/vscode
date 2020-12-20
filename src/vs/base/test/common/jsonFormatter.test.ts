@@ -8,15 +8,15 @@ import * as assert from 'assert';
 suite('JSON - formatter', () => {
 
 	function format(content: string, expected: string, insertSpaces = true) {
-		let range: Formatter.Range | undefined = undefined;
-		const rangeStart = content.indexOf('|');
-		const rangeEnd = content.lastIndexOf('|');
+		let range: Formatter.Range | undefined = void 0;
+		var rangeStart = content.indexOf('|');
+		var rangeEnd = content.lastIndexOf('|');
 		if (rangeStart !== -1 && rangeEnd !== -1) {
 			content = content.substring(0, rangeStart) + content.substring(rangeStart + 1, rangeEnd) + content.substring(rangeEnd + 1);
 			range = { offset: rangeStart, length: rangeEnd - rangeStart };
 		}
 
-		const edits = Formatter.format(content, range, { tabSize: 2, insertSpaces: insertSpaces, eol: '\n' });
+		var edits = Formatter.format(content, range, { tabSize: 2, insertSpaces: insertSpaces, eol: '\n' });
 
 		let lastEditOffset = content.length;
 		for (let i = edits.length - 1; i >= 0; i--) {
@@ -32,11 +32,11 @@ suite('JSON - formatter', () => {
 	}
 
 	test('object - single property', () => {
-		const content = [
+		var content = [
 			'{"x" : 1}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "x": 1',
 			'}'
@@ -45,11 +45,11 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('object - multiple properties', () => {
-		const content = [
+		var content = [
 			'{"x" : 1,  "y" : "foo", "z"  : true}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "x": 1,',
 			'  "y": "foo",',
@@ -60,11 +60,11 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('object - no properties ', () => {
-		const content = [
+		var content = [
 			'{"x" : {    },  "y" : {}}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "x": {},',
 			'  "y": {}',
@@ -74,11 +74,11 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('object - nesting', () => {
-		const content = [
+		var content = [
 			'{"x" : {  "y" : { "z"  : { }}, "a": true}}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "x": {',
 			'    "y": {',
@@ -93,11 +93,11 @@ suite('JSON - formatter', () => {
 	});
 
 	test('array - single items', () => {
-		const content = [
+		var content = [
 			'["[]"]'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  "[]"',
 			']'
@@ -107,11 +107,11 @@ suite('JSON - formatter', () => {
 	});
 
 	test('array - multiple items', () => {
-		const content = [
+		var content = [
 			'[true,null,1.2]'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  true,',
 			'  null,',
@@ -123,11 +123,11 @@ suite('JSON - formatter', () => {
 	});
 
 	test('array - no items', () => {
-		const content = [
+		var content = [
 			'[      ]'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[]'
 		].join('\n');
 
@@ -135,11 +135,11 @@ suite('JSON - formatter', () => {
 	});
 
 	test('array - nesting', () => {
-		const content = [
+		var content = [
 			'[ [], [ [ {} ], "a" ]  ]'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  [],',
 			'  [',
@@ -155,11 +155,11 @@ suite('JSON - formatter', () => {
 	});
 
 	test('syntax errors', () => {
-		const content = [
+		var content = [
 			'[ null 1.2 ]'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  null 1.2',
 			']',
@@ -169,7 +169,7 @@ suite('JSON - formatter', () => {
 	});
 
 	test('empty lines', () => {
-		const content = [
+		var content = [
 			'{',
 			'"a": true,',
 			'',
@@ -177,7 +177,7 @@ suite('JSON - formatter', () => {
 			'}',
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'\t"a": true,',
 			'\t"b": true',
@@ -187,14 +187,14 @@ suite('JSON - formatter', () => {
 		format(content, expected, false);
 	});
 	test('single line comment', () => {
-		const content = [
+		var content = [
 			'[ ',
 			'//comment',
 			'"foo", "bar"',
 			'] '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  //comment',
 			'  "foo",',
@@ -205,14 +205,14 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('block line comment', () => {
-		const content = [
+		var content = [
 			'[{',
 			'        /*comment*/     ',
 			'"foo" : true',
 			'}] '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[',
 			'  {',
 			'    /*comment*/',
@@ -224,13 +224,13 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('single line comment on same line', () => {
-		const content = [
+		var content = [
 			' {  ',
 			'        "a": {}// comment    ',
 			' } '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "a": {} // comment    ',
 			'}',
@@ -239,12 +239,12 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('single line comment on same line 2', () => {
-		const content = [
+		var content = [
 			'{ //comment',
 			'}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{ //comment',
 			'}'
 		].join('\n');
@@ -252,13 +252,13 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('block comment on same line', () => {
-		const content = [
+		var content = [
 			'{      "a": {}, /*comment*/    ',
 			'        /*comment*/ "b": {},    ',
 			'        "c": {/*comment*/}    } ',
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "a": {}, /*comment*/',
 			'  /*comment*/ "b": {},',
@@ -270,14 +270,14 @@ suite('JSON - formatter', () => {
 	});
 
 	test('block comment on same line advanced', () => {
-		const content = [
+		var content = [
 			' {       "d": [',
 			'             null',
 			'        ] /*comment*/',
 			'        ,"e": /*comment*/ [null] }',
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "d": [',
 			'    null',
@@ -292,12 +292,12 @@ suite('JSON - formatter', () => {
 	});
 
 	test('multiple block comments on same line', () => {
-		const content = [
+		var content = [
 			'{      "a": {} /*comment*/, /*comment*/   ',
 			'        /*comment*/ "b": {}  /*comment*/  } '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "a": {} /*comment*/, /*comment*/',
 			'  /*comment*/ "b": {} /*comment*/',
@@ -307,12 +307,12 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('multiple mixed comments on same line', () => {
-		const content = [
+		var content = [
 			'[ /*comment*/  /*comment*/   // comment ',
 			']'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'[ /*comment*/ /*comment*/ // comment ',
 			']'
 		].join('\n');
@@ -321,13 +321,13 @@ suite('JSON - formatter', () => {
 	});
 
 	test('range', () => {
-		const content = [
+		var content = [
 			'{ "a": {},',
 			'|"b": [null, null]|',
 			'} '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{ "a": {},',
 			'"b": [',
 			'  null,',
@@ -340,14 +340,14 @@ suite('JSON - formatter', () => {
 	});
 
 	test('range with existing indent', () => {
-		const content = [
+		var content = [
 			'{ "a": {},',
 			'   |"b": [null],',
 			'"c": {}',
 			'}|'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{ "a": {},',
 			'   "b": [',
 			'    null',
@@ -360,14 +360,14 @@ suite('JSON - formatter', () => {
 	});
 
 	test('range with existing indent - tabs', () => {
-		const content = [
+		var content = [
 			'{ "a": {},',
 			'|  "b": [null],   ',
 			'"c": {}',
 			'} |    '
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{ "a": {},',
 			'\t"b": [',
 			'\t\tnull',
@@ -381,7 +381,7 @@ suite('JSON - formatter', () => {
 
 
 	test('block comment none-line breaking symbols', () => {
-		const content = [
+		var content = [
 			'{ "a": [ 1',
 			'/* comment */',
 			', 2',
@@ -394,7 +394,7 @@ suite('JSON - formatter', () => {
 			'}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "a": [',
 			'    1',
@@ -413,7 +413,7 @@ suite('JSON - formatter', () => {
 		format(content, expected);
 	});
 	test('line comment after none-line breaking symbols', () => {
-		const content = [
+		var content = [
 			'{ "a":',
 			'// comment',
 			'null,',
@@ -424,7 +424,7 @@ suite('JSON - formatter', () => {
 			'}'
 		].join('\n');
 
-		const expected = [
+		var expected = [
 			'{',
 			'  "a":',
 			'  // comment',

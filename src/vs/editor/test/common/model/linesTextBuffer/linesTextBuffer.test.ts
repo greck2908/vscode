@@ -5,23 +5,20 @@
 
 import * as assert from 'assert';
 import { Range } from 'vs/editor/common/core/range';
-import { DefaultEndOfLine } from 'vs/editor/common/model';
-import { IValidatedEditOperation, PieceTreeTextBuffer } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer';
+import { PieceTreeTextBuffer, IValidatedEditOperation } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer';
 import { createTextBufferFactory } from 'vs/editor/common/model/textModel';
+import { DefaultEndOfLine } from 'vs/editor/common/model';
 
 suite('PieceTreeTextBuffer._getInverseEdits', () => {
 
-	function editOp(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, text: string[] | null): IValidatedEditOperation {
+	function editOp(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, text: string[]): IValidatedEditOperation {
 		return {
 			sortIndex: 0,
 			identifier: null,
 			range: new Range(startLineNumber, startColumn, endLineNumber, endColumn),
 			rangeOffset: 0,
 			rangeLength: 0,
-			text: text ? text.join('\n') : '',
-			eolCount: text ? text.length - 1 : 0,
-			firstLineLength: text ? text[0].length : 0,
-			lastLineLength: text ? text[text.length - 1].length : 0,
+			lines: text,
 			forceMoveMarkers: false,
 			isAutoWhitespaceEdit: false
 		};
@@ -265,17 +262,14 @@ suite('PieceTreeTextBuffer._getInverseEdits', () => {
 
 suite('PieceTreeTextBuffer._toSingleEditOperation', () => {
 
-	function editOp(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, rangeOffset: number, rangeLength: number, text: string[] | null): IValidatedEditOperation {
+	function editOp(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, rangeOffset: number, rangeLength: number, text: string[]): IValidatedEditOperation {
 		return {
 			sortIndex: 0,
 			identifier: null,
 			range: new Range(startLineNumber, startColumn, endLineNumber, endColumn),
 			rangeOffset: rangeOffset,
 			rangeLength: rangeLength,
-			text: text ? text.join('\n') : '',
-			eolCount: text ? text.length - 1 : 0,
-			firstLineLength: text ? text[0].length : 0,
-			lastLineLength: text ? text[text.length - 1].length : 0,
+			lines: text,
 			forceMoveMarkers: false,
 			isAutoWhitespaceEdit: false
 		};
@@ -312,10 +306,10 @@ suite('PieceTreeTextBuffer._toSingleEditOperation', () => {
 			'',
 			'1'
 		], [
-			editOp(1, 1, 1, 3, 0, 2, ['Your']),
-			editOp(1, 4, 1, 4, 3, 0, ['Interesting ']),
-			editOp(2, 3, 2, 6, 16, 3, null)
-		],
+				editOp(1, 1, 1, 3, 0, 2, ['Your']),
+				editOp(1, 4, 1, 4, 3, 0, ['Interesting ']),
+				editOp(2, 3, 2, 6, 16, 3, null)
+			],
 			editOp(1, 1, 2, 6, 0, 19, [
 				'Your Interesting First Line',
 				'\t\t'

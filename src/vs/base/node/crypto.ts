@@ -5,34 +5,39 @@
 
 import * as fs from 'fs';
 import * as crypto from 'crypto';
+import * as stream from 'stream';
+import { TPromise } from 'vs/base/common/winjs.base';
 import { once } from 'vs/base/common/functional';
 
-export async function checksum(path: string, sha1hash: string | undefined): Promise<void> {
-	const checksumPromise = new Promise<string | undefined>((resolve, reject) => {
+export function checksum(path: string, sha1hash: string): TPromise<void> {
+	const promise = new TPromise<string | undefined>((c, e) => {
 		const input = fs.createReadStream(path);
 		const hash = crypto.createHash('sha1');
-		input.pipe(hash);
+		const hashStream = hash as any as stream.PassThrough;
+		input.pipe(hashStream);
 
 		const done = once((err?: Error, result?: string) => {
 			input.removeAllListeners();
-			hash.removeAllListeners();
+			hashStream.removeAllListeners();
 
 			if (err) {
-				reject(err);
+				e(err);
 			} else {
-				resolve(result);
+				c(result);
 			}
 		});
 
 		input.once('error', done);
 		input.once('end', done);
-		hash.once('error', done);
-		hash.once('data', (data: Buffer) => done(undefined, data.toString('hex')));
+		hashStream.once('error', done);
+		hashStream.once('data', (data: Buffer) => done(undefined, data.toString('hex')));
 	});
 
-	const hash = await checksumPromise;
+	return promise.then(hash => {
+		if (hash !== sha1hash) {
+			return TPromise.wrapError<void>(new Error('Hash mismatch'));
+		}
 
-	if (hash !== sha1hash) {
-		throw new Error('Hash mismatch');
-	}
+		return TPromise.as(void 0);
+	});
 }

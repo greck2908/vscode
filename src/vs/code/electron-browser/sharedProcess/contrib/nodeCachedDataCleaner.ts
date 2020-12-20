@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { basename, dirname, join } from 'vs/base/common/path';
+import { basename, dirname, join } from 'path';
 import { onUnexpectedError } from 'vs/base/common/errors';
-import { toDisposable, DisposableStore } from 'vs/base/common/lifecycle';
+import { dispose, IDisposable } from 'vs/base/common/lifecycle';
 import { readdir, rimraf, stat } from 'vs/base/node/pfs';
-import product from 'vs/platform/product/common/product';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
+import product from 'vs/platform/node/product';
 
 export class NodeCachedDataCleaner {
 
@@ -15,38 +16,38 @@ export class NodeCachedDataCleaner {
 		? 1000 * 60 * 60 * 24 * 7 // roughly 1 week
 		: 1000 * 60 * 60 * 24 * 30 * 3; // roughly 3 months
 
-	private readonly _disposables = new DisposableStore();
+	private _disposables: IDisposable[] = [];
 
 	constructor(
-		private readonly nodeCachedDataDir: string | undefined
+		@IEnvironmentService private readonly _environmentService: IEnvironmentService
 	) {
 		this._manageCachedDataSoon();
 	}
 
 	dispose(): void {
-		this._disposables.dispose();
+		this._disposables = dispose(this._disposables);
 	}
 
 	private _manageCachedDataSoon(): void {
 		// Cached data is stored as user data and we run a cleanup task everytime
 		// the editor starts. The strategy is to delete all files that are older than
 		// 3 months (1 week respectively)
-		if (!this.nodeCachedDataDir) {
+		if (!this._environmentService.nodeCachedDataDir) {
 			return;
 		}
 
 		// The folder which contains folders of cached data. Each of these folder is per
 		// version
-		const nodeCachedDataRootDir = dirname(this.nodeCachedDataDir);
-		const nodeCachedDataCurrent = basename(this.nodeCachedDataDir);
+		const nodeCachedDataRootDir = dirname(this._environmentService.nodeCachedDataDir);
+		const nodeCachedDataCurrent = basename(this._environmentService.nodeCachedDataDir);
 
-		let handle: NodeJS.Timeout | undefined = setTimeout(() => {
+		let handle = setTimeout(() => {
 			handle = undefined;
 
 			readdir(nodeCachedDataRootDir).then(entries => {
 
 				const now = Date.now();
-				const deletes: Promise<unknown>[] = [];
+				const deletes: Thenable<any>[] = [];
 
 				entries.forEach(entry => {
 					// name check
@@ -75,11 +76,8 @@ export class NodeCachedDataCleaner {
 
 		}, 30 * 1000);
 
-		this._disposables.add(toDisposable(() => {
-			if (handle) {
-				clearTimeout(handle);
-				handle = undefined;
-			}
-		}));
+		this._disposables.push({
+			dispose() { clearTimeout(handle); }
+		});
 	}
 }

@@ -8,20 +8,18 @@
 
 const loader = require('./vs/loader');
 const bootstrap = require('./bootstrap');
-const performance = require('./vs/base/common/performance');
 
 // Bootstrap: NLS
 const nlsConfig = bootstrap.setupNLS();
 
 // Bootstrap: Loader
 loader.config({
-	baseUrl: bootstrap.fileUriFromPath(__dirname, { isWindows: process.platform === 'win32' }),
+	baseUrl: bootstrap.uriFromPath(__dirname),
 	catchError: true,
 	nodeRequire: require,
 	nodeMain: __filename,
 	'vs/nls': nlsConfig,
-	amdModulesPattern: /^vs\//,
-	recordStats: true
+	nodeCachedDataDir: process.env['VSCODE_NODE_CACHED_DATA_DIR']
 });
 
 // Running in Electron
@@ -32,7 +30,7 @@ if (process.env['ELECTRON_RUN_AS_NODE'] || process.versions['electron']) {
 }
 
 // Pseudo NLS support
-if (nlsConfig && nlsConfig.pseudo) {
+if (nlsConfig.pseudo) {
 	loader(['vs/nls'], function (nlsPlugin) {
 		nlsPlugin.setPseudoTranslation(nlsConfig.pseudo);
 	});
@@ -43,19 +41,8 @@ exports.load = function (entrypoint, onLoad, onError) {
 		return;
 	}
 
-	// cached data config
-	if (process.env['VSCODE_NODE_CACHED_DATA_DIR']) {
-		loader.config({
-			nodeCachedData: {
-				path: process.env['VSCODE_NODE_CACHED_DATA_DIR'],
-				seed: entrypoint
-			}
-		});
-	}
-
 	onLoad = onLoad || function () { };
 	onError = onError || function (err) { console.error(err); };
 
-	performance.mark(`fork/willLoadCode`);
 	loader([entrypoint], onLoad, onError);
 };

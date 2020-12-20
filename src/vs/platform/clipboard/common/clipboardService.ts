@@ -10,40 +10,40 @@ export const IClipboardService = createDecorator<IClipboardService>('clipboardSe
 
 export interface IClipboardService {
 
-	readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	/**
 	 * Writes text to the system clipboard.
 	 */
-	writeText(text: string, type?: string): Promise<void>;
+	writeText(text: string): void;
 
 	/**
 	 * Reads the content of the clipboard in plain text
 	 */
-	readText(type?: string): Promise<string>;
+	readText(): string;
 
 	/**
 	 * Reads text from the system find pasteboard.
 	 */
-	readFindText(): Promise<string>;
+	readFindText(): string;
 
 	/**
 	 * Writes text to the system find pasteboard.
 	 */
-	writeFindText(text: string): Promise<void>;
+	writeFindText(text: string): void;
 
 	/**
 	 * Writes resources to the system clipboard.
 	 */
-	writeResources(resources: URI[]): Promise<void>;
+	writeResources(resources: URI[]): void;
 
 	/**
 	 * Reads resources from the system clipboard.
 	 */
-	readResources(): Promise<URI[]>;
+	readResources(): URI[];
 
 	/**
 	 * Find out if resources are copied to the clipboard.
 	 */
-	hasResources(): Promise<boolean>;
+	hasResources(): boolean;
 }

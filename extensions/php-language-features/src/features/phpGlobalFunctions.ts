@@ -7,7 +7,7 @@
 
 import { IEntries } from './phpGlobals';
 
-export const globalfunctions: IEntries = {
+export var globalfunctions: IEntries = {
 	debug_backtrace: {
 		description: 'Generates a backtrace',
 		signature: '([ int $options = DEBUG_BACKTRACE_PROVIDE_OBJECT [, int $limit = 0 ]]): array'
@@ -190,10 +190,6 @@ export const globalfunctions: IEntries = {
 	gc_mem_caches: {
 		description: 'Reclaims memory used by the Zend Engine memory manager',
 		signature: '(void): int'
-	},
-	gc_status: {
-		description: 'Gets information about the garbage collector',
-		signature: '(void): array'
 	},
 	get_cfg_var: {
 		description: 'Gets the value of a PHP configuration option',
@@ -1040,7 +1036,7 @@ export const globalfunctions: IEntries = {
 		signature: '( string $client_keypair , string $server_key ): array'
 	},
 	sodium_crypto_kx_keypair: {
-		description: 'Creates a new sodium keypair',
+		description: 'Description',
 		signature: '(void): string'
 	},
 	sodium_crypto_kx_publickey: {
@@ -1076,11 +1072,11 @@ export const globalfunctions: IEntries = {
 		signature: '( string $password , int $opslimit , int $memlimit ): bool'
 	},
 	sodium_crypto_pwhash_str_verify: {
-		description: 'Verifies that a password matches a hash',
+		description: 'Verify that hash is a valid password verification string',
 		signature: '( string $hash , string $password ): bool'
 	},
 	sodium_crypto_pwhash_str: {
-		description: 'Get an ASCII-encoded hash',
+		description: 'Get an ASCII encoded hash',
 		signature: '( string $password , int $opslimit , int $memlimit ): string'
 	},
 	sodium_crypto_pwhash: {
@@ -1140,7 +1136,7 @@ export const globalfunctions: IEntries = {
 	},
 	sodium_crypto_sign_detached: {
 		description: 'Sign the message',
-		signature: '( string $msg , string $secretkey ): string'
+		signature: '( string $msg , string $keypair ): string'
 	},
 	sodium_crypto_sign_ed25519_pk_to_curve25519: {
 		description: 'Convert an Ed25519 public key to a Curve25519 public key',
@@ -1160,7 +1156,7 @@ export const globalfunctions: IEntries = {
 	},
 	sodium_crypto_sign_open: {
 		description: 'Check that the signed message has a valid signature',
-		signature: '( string $string , string $public_key ): string'
+		signature: '( string $string , string $keypair ): string'
 	},
 	sodium_crypto_sign_publickey_from_secretkey: {
 		description: 'Extract the public key from the secret key',
@@ -1180,7 +1176,7 @@ export const globalfunctions: IEntries = {
 	},
 	sodium_crypto_sign_verify_detached: {
 		description: 'Verify signature for the message',
-		signature: '( string $signature , string $msg , string $public_key ): bool'
+		signature: '( string $signature , string $msg , string $key ): bool'
 	},
 	sodium_crypto_sign: {
 		description: 'Sign a message',
@@ -1199,7 +1195,7 @@ export const globalfunctions: IEntries = {
 		signature: '( int $length , string $nonce , string $key ): string'
 	},
 	sodium_hex2bin: {
-		description: 'Decodes a hexadecimally encoded binary string',
+		description: 'Decode from hexadecimal',
 		signature: '( string $hex [, string $ignore ]): string'
 	},
 	sodium_increment: {
@@ -1444,7 +1440,7 @@ export const globalfunctions: IEntries = {
 	},
 	timezone_offset_get: {
 		description: 'Returns the timezone offset from GMT',
-		signature: '( DateTimeInterface $datetime , DateTimeZone $object ): int'
+		signature: '( DateTime $datetime , DateTimeZone $object ): int'
 	},
 	timezone_transitions_get: {
 		description: 'Returns all transitions for the timezone',
@@ -1699,7 +1695,7 @@ export const globalfunctions: IEntries = {
 		signature: '( string $filename [, bool $use_include_path [, resource $context [, int $offset = 0 [, int $maxlen ]]]]): string'
 	},
 	file_put_contents: {
-		description: 'Write data to a file',
+		description: 'Write a string to a file',
 		signature: '( string $filename , mixed $data [, int $flags = 0 [, resource $context ]]): int'
 	},
 	file: {
@@ -2321,7 +2317,7 @@ export const globalfunctions: IEntries = {
 	},
 	datefmt_set_timezone: {
 		description: 'Sets formatterʼs timezone',
-		signature: '( mixed $zone , IntlDateFormatter $fmt ): bool'
+		signature: '( mixed $zone ): bool'
 	},
 	resourcebundle_count: {
 		description: 'Get number of elements in the bundle',
@@ -2375,14 +2371,6 @@ export const globalfunctions: IEntries = {
 		description: 'Transliterate a string',
 		signature: '( string $subject [, int $start [, int $end , mixed $transliterator ]]): string'
 	},
-	intl_get_error_code: {
-		description: 'Get the last error code',
-		signature: '(void): int'
-	},
-	intl_get_error_message: {
-		description: 'Get description of the last error',
-		signature: '(void): string'
-	},
 	grapheme_extract: {
 		description: 'Function to extract a sequence of default grapheme clusters from a text buffer, which must be encoded in UTF-8',
 		signature: '( string $haystack , int $size [, int $extract_type [, int $start = 0 [, int $next ]]]): string'
@@ -2421,15 +2409,23 @@ export const globalfunctions: IEntries = {
 	},
 	idn_to_ascii: {
 		description: 'Convert domain name to IDNA ASCII form',
-		signature: '( string $domain [, int $options = IDNA_DEFAULT [, int $variant = INTL_IDNA_VARIANT_UTS46 [, array $idna_info ]]]): string'
+		signature: '( string $domain [, int $options = IDNA_DEFAULT [, int $variant = INTL_IDNA_VARIANT_2003 [, array $idna_info ]]]): string'
 	},
 	idn_to_utf8: {
 		description: 'Convert domain name from IDNA ASCII to Unicode',
-		signature: '( string $domain [, int $options = IDNA_DEFAULT [, int $variant = INTL_IDNA_VARIANT_UTS46 [, array $idna_info ]]]): string'
+		signature: '( string $domain [, int $options = IDNA_DEFAULT [, int $variant = INTL_IDNA_VARIANT_2003 [, array $idna_info ]]]): string'
 	},
 	intl_error_name: {
 		description: 'Get symbolic name for a given error code',
 		signature: '( int $error_code ): string'
+	},
+	intl_get_error_code: {
+		description: 'Get the last error code',
+		signature: '(void): int'
+	},
+	intl_get_error_message: {
+		description: 'Get description of the last error',
+		signature: '(void): string'
 	},
 	intl_is_failure: {
 		description: 'Check whether the given error code indicates failure',
@@ -2492,7 +2488,7 @@ export const globalfunctions: IEntries = {
 		signature: '( string $pattern , string $string [, string $option = "msr" ]): bool'
 	},
 	mb_ereg_replace_callback: {
-		description: 'Perform a regular expression search and replace with multibyte support using a callback',
+		description: 'Perform a regular expresssion seach and replace with multibyte support using a callback',
 		signature: '( string $pattern , callable $callback , string $string [, string $option = "msr" ]): string'
 	},
 	mb_ereg_replace: {
@@ -2708,7 +2704,7 @@ export const globalfunctions: IEntries = {
 	},
 	bcmod: {
 		description: 'Get modulus of an arbitrary precision number',
-		signature: '( string $dividend , string $divisor [, int $scale = 0 ]): string'
+		signature: '( string $dividend , string $modulus [, int $scale ]): string'
 	},
 	bcmul: {
 		description: 'Multiply two arbitrary precision numbers',
@@ -2723,8 +2719,8 @@ export const globalfunctions: IEntries = {
 		signature: '( string $base , string $exponent , string $modulus [, int $scale = 0 ]): string'
 	},
 	bcscale: {
-		description: 'Set or get default scale parameter for all bc math functions',
-		signature: '( int $scale ): int'
+		description: 'Set default scale parameter for all bc math functions',
+		signature: '([ int $scale ]): int'
 	},
 	bcsqrt: {
 		description: 'Get the square root of an arbitrary precision number',
@@ -2864,11 +2860,11 @@ export const globalfunctions: IEntries = {
 	},
 	max: {
 		description: 'Find highest value',
-		signature: '( array $values , mixed $value1 [, mixed $... ]): string'
+		signature: '( array $values , mixed $value1 , mixed $value2 [, mixed $... ]): string'
 	},
 	min: {
 		description: 'Find lowest value',
-		signature: '( array $values , mixed $value1 [, mixed $... ]): string'
+		signature: '( array $values , mixed $value1 , mixed $value2 [, mixed $... ]): string'
 	},
 	mt_getrandmax: {
 		description: 'Show largest possible random value',
@@ -3375,17 +3371,13 @@ export const globalfunctions: IEntries = {
 		description: 'Syntax highlighting of a string',
 		signature: '( string $str [, bool $return ]): mixed'
 	},
-	hrtime: {
-		description: 'Get the system\'s high resolution time',
-		signature: '([ bool $get_as_number ]): mixed'
-	},
 	ignore_user_abort: {
 		description: 'Set whether a client disconnect should abort script execution',
 		signature: '([ bool $value ]): int'
 	},
 	pack: {
 		description: 'Pack data into binary string',
-		signature: '( string $format [, mixed $... ]): string'
+		signature: '( string $format [, mixed $args [, mixed $... ]]): string'
 	},
 	php_check_syntax: {
 		description: 'Check the PHP syntax of (and execute) the specified file',
@@ -3410,10 +3402,6 @@ export const globalfunctions: IEntries = {
 	sapi_windows_cp_set: {
 		description: 'Set process codepage',
 		signature: '( int $cp ): bool'
-	},
-	sapi_windows_vt100_support: {
-		description: 'Get or set VT100 support for the specified stream associated to an output buffer of a Windows console.',
-		signature: '( resource $stream [, bool $enable ]): bool'
 	},
 	show_source: {
 		description: 'Alias of highlight_file',
@@ -3556,6 +3544,10 @@ export const globalfunctions: IEntries = {
 	stream_copy_to_stream: {
 		description: 'Copies data from one stream to another',
 		signature: '( resource $source , resource $dest [, int $maxlength = -1 [, int $offset = 0 ]]): int'
+	},
+	stream_encoding: {
+		description: 'Set character set for stream encoding',
+		signature: '( resource $stream [, string $encoding ]): bool'
 	},
 	stream_filter_append: {
 		description: 'Attach a filter to a stream',
@@ -3709,7 +3701,7 @@ export const globalfunctions: IEntries = {
 		signature: '( string $data ): string'
 	},
 	get_headers: {
-		description: 'Fetches all the headers sent by the server in response to an HTTP request',
+		description: 'Fetches all the headers sent by the server in response to a HTTP request',
 		signature: '( string $url [, int $format = 0 [, resource $context ]]): array'
 	},
 	get_meta_tags: {
@@ -3763,10 +3755,6 @@ export const globalfunctions: IEntries = {
 	curl_exec: {
 		description: 'Perform a cURL session',
 		signature: '( resource $ch ): mixed'
-	},
-	curl_file_create: {
-		description: 'Create a CURLFile object',
-		signature: '( string $filename [, string $mimetype [, string $postname ]]): CURLFile'
 	},
 	curl_getinfo: {
 		description: 'Get information regarding a specific transfer',
@@ -3868,12 +3856,16 @@ export const globalfunctions: IEntries = {
 		description: 'Gets cURL version information',
 		signature: '([ int $age = CURLVERSION_NOW ]): array'
 	},
+	curl_file_create: {
+		description: 'Create a CURLFile object',
+		signature: '( string $filename [, string $mimetype [, string $postname ]]): CURLFile'
+	},
 	ftp_alloc: {
 		description: 'Allocates space for a file to be uploaded',
 		signature: '( resource $ftp_stream , int $filesize [, string $result ]): bool'
 	},
 	ftp_append: {
-		description: 'Append the contents of a file to another file on the FTP server',
+		description: 'Append content of a file a another file on the FTP server',
 		signature: '( resource $ftp , string $remote_file , string $local_file [, int $mode ]): bool'
 	},
 	ftp_cdup: {
@@ -4123,11 +4115,11 @@ export const globalfunctions: IEntries = {
 	},
 	setcookie: {
 		description: 'Send a cookie',
-		signature: '( string $name [, string $value = "" [, int $expires = 0 [, string $path = "" [, string $domain = "" [, bool $secure [, bool $httponly [, array $options = [] ]]]]]]]): bool'
+		signature: '( string $name [, string $value = "" [, int $expire = 0 [, string $path = "" [, string $domain = "" [, bool $secure [, bool $httponly ]]]]]]): bool'
 	},
 	setrawcookie: {
 		description: 'Send a cookie without urlencoding the cookie value',
-		signature: '( string $name [, string $value [, int $expires = 0 [, string $path [, string $domain [, bool $secure [, bool $httponly [, array $options = [] ]]]]]]]): bool'
+		signature: '( string $name [, string $value [, int $expire = 0 [, string $path [, string $domain [, bool $secure [, bool $httponly ]]]]]]): bool'
 	},
 	socket_get_status: {
 		description: 'Alias of stream_get_meta_data',
@@ -4239,7 +4231,7 @@ export const globalfunctions: IEntries = {
 	},
 	socket_recvmsg: {
 		description: 'Read a message',
-		signature: '( resource $socket , array $message [, int $flags = 0 ]): int'
+		signature: '( resource $socket , string $message [, int $flags = 0 ]): int'
 	},
 	socket_select: {
 		description: 'Runs the select() system call on the given arrays of sockets with a specified timeout',
@@ -4421,7 +4413,7 @@ export const globalfunctions: IEntries = {
 	},
 	session_set_cookie_params: {
 		description: 'Set the session cookie parameters',
-		signature: '( int $lifetime [, string $path [, string $domain [, bool $secure [, bool $httponly , array $options ]]]]): bool'
+		signature: '( int $lifetime [, string $path [, string $domain [, bool $secure [, bool $httponly ]]]]): bool'
 	},
 	session_set_save_handler: {
 		description: 'Sets user-level session storage functions',
@@ -4503,8 +4495,8 @@ export const globalfunctions: IEntries = {
 		description: 'Alias of rtrim',
 	},
 	chr: {
-		description: 'Generate a single-byte string from a number',
-		signature: '( int $bytevalue ): string'
+		description: 'Return a specific character',
+		signature: '( int $ascii ): string'
 	},
 	chunk_split: {
 		description: 'Split a string into smaller chunks',
@@ -4544,7 +4536,7 @@ export const globalfunctions: IEntries = {
 	},
 	fprintf: {
 		description: 'Write a formatted string to a stream',
-		signature: '( resource $handle , string $format [, mixed $... ]): int'
+		signature: '( resource $handle , string $format [, mixed $args [, mixed $... ]]): int'
 	},
 	get_html_translation_table: {
 		description: 'Returns the translation table used by htmlspecialchars and htmlentities',
@@ -4563,7 +4555,7 @@ export const globalfunctions: IEntries = {
 		signature: '( string $data ): string'
 	},
 	html_entity_decode: {
-		description: 'Convert HTML entities to their corresponding characters',
+		description: 'Convert all HTML entities to their applicable characters',
 		signature: '( string $string [, int $flags = ENT_COMPAT | ENT_HTML401 [, string $encoding = ini_get("default_charset") ]]): string'
 	},
 	htmlentities: {
@@ -4630,7 +4622,7 @@ export const globalfunctions: IEntries = {
 		signature: '( float $number , int $decimals = 0 , string $dec_point = "." , string $thousands_sep = "," ): string'
 	},
 	ord: {
-		description: 'Convert the first byte of a string to a value between 0 and 255',
+		description: 'Return ASCII value of character',
 		signature: '( string $string ): int'
 	},
 	parse_str: {
@@ -4643,7 +4635,7 @@ export const globalfunctions: IEntries = {
 	},
 	printf: {
 		description: 'Output a formatted string',
-		signature: '( string $format [, mixed $... ]): int'
+		signature: '( string $format [, mixed $args [, mixed $... ]]): int'
 	},
 	quoted_printable_decode: {
 		description: 'Convert a quoted-printable string to an 8 bit string',
@@ -4683,7 +4675,7 @@ export const globalfunctions: IEntries = {
 	},
 	sprintf: {
 		description: 'Return a formatted string',
-		signature: '( string $format [, mixed $... ]): string'
+		signature: '( string $format [, mixed $args [, mixed $... ]]): string'
 	},
 	sscanf: {
 		description: 'Parses input from a string according to a format',
@@ -4754,7 +4746,7 @@ export const globalfunctions: IEntries = {
 	},
 	stripos: {
 		description: 'Find the position of the first occurrence of a case-insensitive substring in a string',
-		signature: '( string $haystack , mixed $needle [, int $offset = 0 ]): int'
+		signature: '( string $haystack , string $needle [, int $offset = 0 ]): int'
 	},
 	stripslashes: {
 		description: 'Un-quotes a quoted string',
@@ -4802,11 +4794,11 @@ export const globalfunctions: IEntries = {
 	},
 	strripos: {
 		description: 'Find the position of the last occurrence of a case-insensitive substring in a string',
-		signature: '( string $haystack , mixed $needle [, int $offset = 0 ]): int'
+		signature: '( string $haystack , string $needle [, int $offset = 0 ]): int'
 	},
 	strrpos: {
 		description: 'Find the position of the last occurrence of a substring in a string',
-		signature: '( string $haystack , mixed $needle [, int $offset = 0 ]): int'
+		signature: '( string $haystack , string $needle [, int $offset = 0 ]): int'
 	},
 	strspn: {
 		description: 'Finds the length of the initial segment of a string consisting   entirely of characters contained within a given mask',
@@ -4956,24 +4948,16 @@ export const globalfunctions: IEntries = {
 		description: 'Checks if the given key or index exists in the array',
 		signature: '( mixed $key , array $array ): bool'
 	},
-	array_key_first: {
-		description: 'Gets the first key of an array',
-		signature: '( array $array ): mixed'
-	},
-	array_key_last: {
-		description: 'Gets the last key of an array',
-		signature: '( array $array ): mixed'
-	},
 	array_keys: {
 		description: 'Return all the keys or a subset of the keys of an array',
-		signature: '( array $array , mixed $search_value [, bool $strict ]): array'
+		signature: '( array $array [, mixed $search_value [, bool $strict ]]): array'
 	},
 	array_map: {
 		description: 'Applies the callback to the elements of the given arrays',
 		signature: '( callable $callback , array $array1 [, array $... ]): array'
 	},
 	array_merge_recursive: {
-		description: 'Merge one or more arrays recursively',
+		description: 'Merge two or more arrays recursively',
 		signature: '( array $array1 [, array $... ]): array'
 	},
 	array_merge: {
@@ -5001,7 +4985,7 @@ export const globalfunctions: IEntries = {
 		signature: '( array $array [, mixed $... ]): int'
 	},
 	array_rand: {
-		description: 'Pick one or more random keys out of an array',
+		description: 'Pick one or more random entries out of an array',
 		signature: '( array $array [, int $num = 1 ]): mixed'
 	},
 	array_reduce: {
@@ -5010,11 +4994,11 @@ export const globalfunctions: IEntries = {
 	},
 	array_replace_recursive: {
 		description: 'Replaces elements from passed arrays into the first array recursively',
-		signature: '( array $array1 [, array $... ]): array'
+		signature: '( array $array1 , array $array2 [, array $... ]): array'
 	},
 	array_replace: {
 		description: 'Replaces elements from passed arrays into the first array',
-		signature: '( array $array1 [, array $... ]): array'
+		signature: '( array $array1 , array $array2 [, array $... ]): array'
 	},
 	array_reverse: {
 		description: 'Return an array with elements in reverse order',
@@ -5207,7 +5191,7 @@ export const globalfunctions: IEntries = {
 	},
 	call_user_method: {
 		description: 'Call a user method on an specific object',
-		signature: '( string $method_name , object $obj [, mixed $... ]): mixed'
+		signature: '( string $method_name , object $obj [, mixed $parameter [, mixed $... ]]): mixed'
 	},
 	class_alias: {
 		description: 'Creates an alias for a class',
@@ -5259,7 +5243,7 @@ export const globalfunctions: IEntries = {
 	},
 	is_a: {
 		description: 'Checks if the object is of this class or has this class as one of its parents',
-		signature: '( mixed $object , string $class_name [, bool $allow_string ]): bool'
+		signature: '( object $object , string $class_name [, bool $allow_string ]): bool'
 	},
 	is_subclass_of: {
 		description: 'Checks if the object has this class as one of its parents or implements it',
@@ -5355,7 +5339,7 @@ export const globalfunctions: IEntries = {
 	},
 	call_user_func: {
 		description: 'Call the callback given by the first parameter',
-		signature: '( callable $callback [, mixed $... ]): mixed'
+		signature: '( callable $callback [, mixed $parameter [, mixed $... ]]): mixed'
 	},
 	create_function: {
 		description: 'Create an anonymous (lambda-style) function',
@@ -5367,7 +5351,7 @@ export const globalfunctions: IEntries = {
 	},
 	forward_static_call: {
 		description: 'Call a static method',
-		signature: '( callable $function [, mixed $... ]): mixed'
+		signature: '( callable $function [, mixed $parameter [, mixed $... ]]): mixed'
 	},
 	func_get_arg: {
 		description: 'Return an item from the argument list',
@@ -5391,15 +5375,15 @@ export const globalfunctions: IEntries = {
 	},
 	register_shutdown_function: {
 		description: 'Register a function for execution on shutdown',
-		signature: '( callable $callback [, mixed $... ]): void'
+		signature: '( callable $callback [, mixed $parameter [, mixed $... ]]): void'
 	},
 	register_tick_function: {
 		description: 'Register a function for execution on each tick',
-		signature: '( callable $function [, mixed $... ]): bool'
+		signature: '( callable $function [, mixed $arg [, mixed $... ]]): bool'
 	},
 	unregister_tick_function: {
 		description: 'De-register a function for execution on each tick',
-		signature: '( callable $function ): void'
+		signature: '( string $function_name ): void'
 	},
 	boolval: {
 		description: 'Get the boolean value of a variable',
@@ -5452,10 +5436,6 @@ export const globalfunctions: IEntries = {
 		description: 'Verify that the contents of a variable can be called as a function',
 		signature: '( mixed $var [, bool $syntax_only [, string $callable_name ]]): bool'
 	},
-	is_countable: {
-		description: 'Verify that the contents of a variable is a countable value',
-		signature: '( mixed $var ): array'
-	},
 	is_double: {
 		description: 'Alias of is_float',
 	},
@@ -5505,7 +5485,7 @@ export const globalfunctions: IEntries = {
 		signature: '( mixed $var ): bool'
 	},
 	isset: {
-		description: 'Determine if a variable is declared and is different than NULL',
+		description: 'Determine if a variable is set and is not NULL',
 		signature: '( mixed $var [, mixed $... ]): bool'
 	},
 	print_r: {
@@ -5610,7 +5590,7 @@ export const globalfunctions: IEntries = {
 	},
 	com_load_typelib: {
 		description: 'Loads a Typelib',
-		signature: '( string $typelib_name [, bool $case_sensitive ]): bool'
+		signature: '( string $typelib_name [, bool $case_insensitive ]): bool'
 	},
 	com_message_pump: {
 		description: 'Process COM messages, sleeping for up to timeoutms milliseconds',

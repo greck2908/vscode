@@ -6,8 +6,6 @@
 .colorpicker-widget {
 	height: 190px;
 	user-select: none;
-	-webkit-user-select: none;
-	-ms-user-select: none;
 }
 
 .monaco-editor .colorpicker-hover:focus {
@@ -86,21 +84,21 @@
 .colorpicker-body .hue-strip {
 	position: relative;
 	margin-left: 8px;
-	cursor: grab;
+	cursor: -webkit-grab;
 	background: linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
 }
 
 .colorpicker-body .opacity-strip {
 	position: relative;
 	margin-left: 8px;
-	cursor: grab;
+	cursor: -webkit-grab;
 	background: url('images/opacity-background.png');
 	background-size: 9px 9px;
 	image-rendering: pixelated;
 }
 
 .colorpicker-body .strip.grabbing {
-	cursor: grabbing;
+	cursor: -webkit-grabbing;
 }
 
 .colorpicker-body .slider {

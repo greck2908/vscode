@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+'use strict';
 
 import { createScanner, SyntaxKind, ScanError } from './json';
 
@@ -80,7 +81,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 		rangeStart = 0;
 		rangeEnd = documentText.length;
 	}
-	const eol = getEOL(options, documentText);
+	let eol = getEOL(options, documentText);
 
 	let lineBreak = false;
 	let indentLevel = 0;
@@ -91,7 +92,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 		indentValue = '\t';
 	}
 
-	const scanner = createScanner(formatText, false);
+	let scanner = createScanner(formatText, false);
 	let hasError = false;
 
 	function newLineAndIndent(): string {
@@ -107,7 +108,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 		hasError = token === SyntaxKind.Unknown || scanner.getTokenError() !== ScanError.None;
 		return token;
 	}
-	const editOperations: Edit[] = [];
+	let editOperations: Edit[] = [];
 	function addEdit(text: string, startOffset: number, endOffset: number) {
 		if (!hasError && startOffset < rangeEnd && endOffset > rangeStart && documentText.substring(startOffset, endOffset) !== text) {
 			editOperations.push({ offset: startOffset, length: endOffset - startOffset, content: text });
@@ -117,8 +118,8 @@ export function format(documentText: string, range: Range | undefined, options: 
 	let firstToken = scanNext();
 
 	if (firstToken !== SyntaxKind.EOF) {
-		const firstTokenStart = scanner.getTokenOffset() + formatTextStart;
-		const initialIndent = repeat(indentValue, initialIndentLevel);
+		let firstTokenStart = scanner.getTokenOffset() + formatTextStart;
+		let initialIndent = repeat(indentValue, initialIndentLevel);
 		addEdit(initialIndent, formatTextStart, firstTokenStart);
 	}
 
@@ -129,7 +130,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 		let replaceContent = '';
 		while (!lineBreak && (secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)) {
 			// comments on the same line: keep them on the same line, but ignore them otherwise
-			const commentTokenStart = scanner.getTokenOffset() + formatTextStart;
+			let commentTokenStart = scanner.getTokenOffset() + formatTextStart;
 			addEdit(' ', firstTokenEnd, commentTokenStart);
 			firstTokenEnd = scanner.getTokenOffset() + scanner.getTokenLength() + formatTextStart;
 			replaceContent = secondToken === SyntaxKind.LineCommentTrivia ? newLineAndIndent() : '';
@@ -195,7 +196,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 			}
 
 		}
-		const secondTokenStart = scanner.getTokenOffset() + formatTextStart;
+		let secondTokenStart = scanner.getTokenOffset() + formatTextStart;
 		addEdit(replaceContent, firstTokenEnd, secondTokenStart);
 		firstToken = secondToken;
 	}
@@ -213,9 +214,9 @@ function repeat(s: string, count: number): string {
 function computeIndentLevel(content: string, options: FormattingOptions): number {
 	let i = 0;
 	let nChars = 0;
-	const tabSize = options.tabSize || 4;
+	let tabSize = options.tabSize || 4;
 	while (i < content.length) {
-		const ch = content.charAt(i);
+		let ch = content.charAt(i);
 		if (ch === ' ') {
 			nChars++;
 		} else if (ch === '\t') {
@@ -228,9 +229,9 @@ function computeIndentLevel(content: string, options: FormattingOptions): number
 	return Math.floor(nChars / tabSize);
 }
 
-export function getEOL(options: FormattingOptions, text: string): string {
+function getEOL(options: FormattingOptions, text: string): string {
 	for (let i = 0; i < text.length; i++) {
-		const ch = text.charAt(i);
+		let ch = text.charAt(i);
 		if (ch === '\r') {
 			if (i + 1 < text.length && text.charAt(i + 1) === '\n') {
 				return '\r\n';

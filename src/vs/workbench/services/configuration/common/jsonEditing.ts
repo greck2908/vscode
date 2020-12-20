@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'vs/base/common/uri';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
-import { JSONPath } from 'vs/base/common/json';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
 export const IJSONEditingService = createDecorator<IJSONEditingService>('jsonEditingService');
 
@@ -29,13 +28,13 @@ export class JSONEditingError extends Error {
 }
 
 export interface IJSONValue {
-	path: JSONPath;
+	key: string;
 	value: any;
 }
 
 export interface IJSONEditingService {
 
-	readonly _serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
-	write(resource: URI, values: IJSONValue[], save: boolean): Promise<void>;
+	write(resource: URI, value: IJSONValue, save: boolean): Promise<void>;
 }

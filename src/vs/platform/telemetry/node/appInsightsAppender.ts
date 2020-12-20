@@ -4,12 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as appInsights from 'applicationinsights';
-import { onUnexpectedError } from 'vs/base/common/errors';
-import { mixin } from 'vs/base/common/objects';
-import { ITelemetryAppender, validateTelemetryData } from 'vs/platform/telemetry/common/telemetryUtils';
+import { isObject } from 'vs/base/common/types';
+import { safeStringify, mixin } from 'vs/base/common/objects';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { ITelemetryAppender } from 'vs/platform/telemetry/common/telemetryUtils';
+import { ILogService } from 'vs/platform/log/common/log';
 
-async function getClient(aiKey: string): Promise<appInsights.TelemetryClient> {
-	const appInsights = await import('applicationinsights');
+function getClient(aiKey: string): appInsights.TelemetryClient {
+
 	let client: appInsights.TelemetryClient;
 	if (appInsights.defaultClient) {
 		client = new appInsights.TelemetryClient(aiKey);
@@ -34,52 +36,95 @@ async function getClient(aiKey: string): Promise<appInsights.TelemetryClient> {
 	return client;
 }
 
+interface Properties {
+	[key: string]: string;
+}
+
+interface Measurements {
+	[key: string]: number;
+}
 
 export class AppInsightsAppender implements ITelemetryAppender {
 
-	private _aiClient: string | appInsights.TelemetryClient | undefined;
-	private _asyncAIClient: Promise<appInsights.TelemetryClient> | null;
+	private _aiClient: appInsights.TelemetryClient;
 
 	constructor(
 		private _eventPrefix: string,
-		private _defaultData: { [key: string]: any } | null,
-		aiKeyOrClientFactory: string | (() => appInsights.TelemetryClient), // allow factory function for testing
+		private _defaultData: { [key: string]: any },
+		aiKeyOrClientFactory: string | (() => appInsights.ITelemetryClient), // allow factory function for testing
+		@ILogService private _logService?: ILogService
 	) {
 		if (!this._defaultData) {
 			this._defaultData = Object.create(null);
 		}
 
-		if (typeof aiKeyOrClientFactory === 'function') {
+		if (typeof aiKeyOrClientFactory === 'string') {
+			this._aiClient = getClient(aiKeyOrClientFactory);
+		} else if (typeof aiKeyOrClientFactory === 'function') {
 			this._aiClient = aiKeyOrClientFactory();
-		} else {
-			this._aiClient = aiKeyOrClientFactory;
 		}
-		this._asyncAIClient = null;
 	}
 
-	private _withAIClient(callback: (aiClient: appInsights.TelemetryClient) => void): void {
-		if (!this._aiClient) {
-			return;
-		}
+	private static _getData(data?: any): { properties: Properties, measurements: Measurements } {
 
-		if (typeof this._aiClient !== 'string') {
-			callback(this._aiClient);
-			return;
-		}
+		const properties: Properties = Object.create(null);
+		const measurements: Measurements = Object.create(null);
 
-		if (!this._asyncAIClient) {
-			this._asyncAIClient = getClient(this._aiClient);
-		}
+		const flat = Object.create(null);
+		AppInsightsAppender._flaten(data, flat);
 
-		this._asyncAIClient.then(
-			(aiClient) => {
-				callback(aiClient);
-			},
-			(err) => {
-				onUnexpectedError(err);
-				console.error(err);
+		for (let prop in flat) {
+			// enforce property names less than 150 char, take the last 150 char
+			prop = prop.length > 150 ? prop.substr(prop.length - 149) : prop;
+			const value = flat[prop];
+
+			if (typeof value === 'number') {
+				measurements[prop] = value;
+
+			} else if (typeof value === 'boolean') {
+				measurements[prop] = value ? 1 : 0;
+
+			} else if (typeof value === 'string') {
+				//enforce property value to be less than 1024 char, take the first 1024 char
+				properties[prop] = value.substring(0, 1023);
+
+			} else if (typeof value !== 'undefined' && value !== null) {
+				properties[prop] = value;
 			}
-		);
+		}
+
+		return {
+			properties,
+			measurements
+		};
+	}
+
+	private static _flaten(obj: any, result: { [key: string]: any }, order: number = 0, prefix?: string): void {
+		if (!obj) {
+			return;
+		}
+
+		for (let item of Object.getOwnPropertyNames(obj)) {
+			const value = obj[item];
+			const index = prefix ? prefix + item : item;
+
+			if (Array.isArray(value)) {
+				result[index] = safeStringify(value);
+
+			} else if (value instanceof Date) {
+				// TODO unsure why this is here and not in _getData
+				result[index] = value.toISOString();
+
+			} else if (isObject(value)) {
+				if (order < 2) {
+					AppInsightsAppender._flaten(value, result, order + 1, index + '.');
+				} else {
+					result[index] = safeStringify(value);
+				}
+			} else {
+				result[index] = value;
+			}
+		}
 	}
 
 	log(eventName: string, data?: any): void {
@@ -87,29 +132,30 @@ export class AppInsightsAppender implements ITelemetryAppender {
 			return;
 		}
 		data = mixin(data, this._defaultData);
-		data = validateTelemetryData(data);
+		data = AppInsightsAppender._getData(data);
 
-		this._withAIClient((aiClient) => aiClient.trackEvent({
+		if (this._logService) {
+			this._logService.trace(`telemetry/${eventName}`, data);
+		}
+		this._aiClient.trackEvent({
 			name: this._eventPrefix + '/' + eventName,
 			properties: data.properties,
 			measurements: data.measurements
-		}));
+		});
 	}
 
-	flush(): Promise<any> {
+	dispose(): TPromise<any> {
 		if (this._aiClient) {
-			return new Promise(resolve => {
-				this._withAIClient((aiClient) => {
-					aiClient.flush({
-						callback: () => {
-							// all data flushed
-							this._aiClient = undefined;
-							resolve(undefined);
-						}
-					});
+			return new TPromise(resolve => {
+				this._aiClient.flush({
+					callback: () => {
+						// all data flushed
+						this._aiClient = undefined;
+						resolve(void 0);
+					}
 				});
 			});
 		}
-		return Promise.resolve(undefined);
+		return undefined;
 	}
 }

@@ -3,55 +3,40 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { join } from 'vs/base/common/path';
+import * as paths from 'vs/base/common/paths';
 import { URI } from 'vs/base/common/uri';
+import { TPromise, TValueCallback } from 'vs/base/common/winjs.base';
 import { canceled } from 'vs/base/common/errors';
-import { isWindows } from 'vs/base/common/platform';
 
-export type ValueCallback<T = any> = (value: T | Promise<T>) => void;
+export class DeferredTPromise<T> extends TPromise<T> {
 
-export class DeferredPromise<T> {
-
-	private completeCallback!: ValueCallback<T>;
-	private errorCallback!: (err: any) => void;
-
-	public p: Promise<any>;
+	private completeCallback: TValueCallback<T>;
+	private errorCallback: (err: any) => void;
 
 	constructor() {
-		this.p = new Promise<any>((c, e) => {
-			this.completeCallback = c;
-			this.errorCallback = e;
+		let captured: any;
+		super((c, e) => {
+			captured = { c, e };
 		});
+		this.completeCallback = captured.c;
+		this.errorCallback = captured.e;
 	}
 
 	public complete(value: T) {
-		return new Promise<void>(resolve => {
-			this.completeCallback(value);
-			resolve();
-		});
+		this.completeCallback(value);
 	}
 
 	public error(err: any) {
-		return new Promise<void>(resolve => {
-			this.errorCallback(err);
-			resolve();
-		});
+		this.errorCallback(err);
 	}
 
 	public cancel() {
-		new Promise<void>(resolve => {
-			this.errorCallback(canceled());
-			resolve();
-		});
+		this.errorCallback(canceled());
 	}
 }
 
 export function toResource(this: any, path: string) {
-	if (isWindows) {
-		return URI.file(join('C:\\', btoa(this.test.fullTitle()), path));
-	}
-
-	return URI.file(join('/', btoa(this.test.fullTitle()), path));
+	return URI.file(paths.join('C:\\', Buffer.from(this.test.fullTitle()).toString('base64'), path));
 }
 
 export function suiteRepeat(n: number, description: string, callback: (this: any) => void): void {
@@ -60,8 +45,12 @@ export function suiteRepeat(n: number, description: string, callback: (this: any
 	}
 }
 
-export function testRepeat(n: number, description: string, callback: (this: any) => any): void {
+export function testRepeat(n: number, description: string, callback: (this: any, done: MochaDone) => any): void {
 	for (let i = 0; i < n; i++) {
 		test(`${description} (iteration ${i})`, callback);
 	}
+}
+
+export function testRepeatOnly(n: number, description: string, callback: (this: any, done: MochaDone) => any): void {
+	suite.only('repeat', () => testRepeat(n, description, callback));
 }

@@ -6,7 +6,7 @@ import * as assert from 'assert';
 import { DiffComputer } from 'vs/editor/common/diff/diffComputer';
 import { IChange, ICharChange, ILineChange } from 'vs/editor/common/editorCommon';
 
-function extractCharChangeRepresentation(change: ICharChange, expectedChange: ICharChange | null): ICharChange {
+function extractCharChangeRepresentation(change: ICharChange, expectedChange: ICharChange): ICharChange {
 	let hasOriginal = expectedChange && expectedChange.originalStartLineNumber > 0;
 	let hasModified = expectedChange && expectedChange.modifiedStartLineNumber > 0;
 	return {
@@ -23,8 +23,9 @@ function extractCharChangeRepresentation(change: ICharChange, expectedChange: IC
 }
 
 function extractLineChangeRepresentation(change: ILineChange, expectedChange: ILineChange): IChange | ILineChange {
+	let charChanges: ICharChange[];
 	if (change.charChanges) {
-		let charChanges: ICharChange[] = [];
+		charChanges = [];
 		for (let i = 0; i < change.charChanges.length; i++) {
 			charChanges.push(
 				extractCharChangeRepresentation(
@@ -33,20 +34,13 @@ function extractLineChangeRepresentation(change: ILineChange, expectedChange: IL
 				)
 			);
 		}
-		return {
-			originalStartLineNumber: change.originalStartLineNumber,
-			originalEndLineNumber: change.originalEndLineNumber,
-			modifiedStartLineNumber: change.modifiedStartLineNumber,
-			modifiedEndLineNumber: change.modifiedEndLineNumber,
-			charChanges: charChanges
-		};
 	}
 	return {
 		originalStartLineNumber: change.originalStartLineNumber,
 		originalEndLineNumber: change.originalEndLineNumber,
 		modifiedStartLineNumber: change.modifiedStartLineNumber,
 		modifiedEndLineNumber: change.modifiedEndLineNumber,
-		charChanges: undefined
+		charChanges: charChanges
 	};
 }
 
@@ -55,10 +49,9 @@ function assertDiff(originalLines: string[], modifiedLines: string[], expectedCh
 		shouldComputeCharChanges,
 		shouldPostProcessCharChanges,
 		shouldIgnoreTrimWhitespace,
-		shouldMakePrettyDiff: true,
-		maxComputationTime: 0
+		shouldMakePrettyDiff: true
 	});
-	let changes = diffComputer.computeDiff().changes;
+	let changes = diffComputer.computeDiff();
 
 	let extracted: IChange[] = [];
 	for (let i = 0; i < changes.length; i++) {
@@ -848,33 +841,6 @@ suite('Editor Diff - DiffComputer', () => {
 			),
 			createLineChange(
 				25, 55, 31, 0
-			)
-		];
-		assertDiff(original, modified, expected, false, false, false);
-	});
-
-	test('gives preference to matching longer lines', () => {
-		let original = [
-			'A',
-			'A',
-			'BB',
-			'C',
-		];
-		let modified = [
-			'A',
-			'BB',
-			'A',
-			'D',
-			'E',
-			'A',
-			'C',
-		];
-		let expected = [
-			createLineChange(
-				2, 2, 1, 0
-			),
-			createLineChange(
-				3, 0, 3, 6
 			)
 		];
 		assertDiff(original, modified, expected, false, false, false);

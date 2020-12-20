@@ -7,49 +7,41 @@ import * as vscode from 'vscode';
 import VsCodeTelemetryReporter from 'vscode-extension-telemetry';
 import { memoize } from './memoize';
 
-interface PackageInfo {
+interface IPackageInfo {
 	readonly name: string;
 	readonly version: string;
 	readonly aiKey: string;
 }
 
-export interface TelemetryProperties {
-	readonly [prop: string]: string | number | undefined;
-}
-
-export interface TelemetryReporter {
-	logTelemetry(eventName: string, properties?: TelemetryProperties): void;
-
-	dispose(): void;
-}
-
-export class VSCodeTelemetryReporter implements TelemetryReporter {
+export default class TelemetryReporter {
 	private _reporter: VsCodeTelemetryReporter | null = null;
+
+	dispose() {
+		if (this._reporter) {
+			this._reporter.dispose();
+			this._reporter = null;
+		}
+	}
 
 	constructor(
 		private readonly clientVersionDelegate: () => string
 	) { }
 
-	public logTelemetry(eventName: string, properties: { [prop: string]: string } = {}) {
+	public logTelemetry(eventName: string, properties?: { [prop: string]: string }) {
 		const reporter = this.reporter;
-		if (!reporter) {
-			return;
-		}
-
-		/* __GDPR__FRAGMENT__
-			"TypeScriptCommonProperties" : {
-				"version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+		if (reporter) {
+			if (!properties) {
+				properties = {};
 			}
-		*/
-		properties['version'] = this.clientVersionDelegate();
 
-		reporter.sendTelemetryEvent(eventName, properties);
-	}
+			/* __GDPR__FRAGMENT__
+				"TypeScriptCommonProperties" : {
+					"version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+				}
+			*/
+			properties['version'] = this.clientVersionDelegate();
 
-	public dispose() {
-		if (this._reporter) {
-			this._reporter.dispose();
-			this._reporter = null;
+			reporter.sendTelemetryEvent(eventName, properties);
 		}
 	}
 
@@ -66,7 +58,7 @@ export class VSCodeTelemetryReporter implements TelemetryReporter {
 	}
 
 	@memoize
-	private get packageInfo(): PackageInfo | null {
+	private get packageInfo(): IPackageInfo | null {
 		const { packageJSON } = vscode.extensions.getExtension('vscode.typescript-language-features')!;
 		if (packageJSON) {
 			return {

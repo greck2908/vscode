@@ -4,15 +4,13 @@
 	"description": "%description%",
 	"version": "1.0.0",
 	"publisher": "vscode",
-	"license": "MIT",
 	"engines": { "vscode": "*" },
 	"contributes": {
 		"themes": [
 			{
-				"id": "Tomorrow Night Blue",
-				"label": "%themeLabel%",
+				"label": "Tomorrow Night Blue",
 				"uiTheme": "vs-dark",
-				"path": "./themes/tomorrow-night-blue-color-theme.json"
+				"path": "./themes/tomorrow-night-blue-theme.json"
 			}
 		]
 	}

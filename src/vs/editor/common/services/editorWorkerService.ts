@@ -4,30 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'vs/base/common/uri';
-import { IRange } from 'vs/editor/common/core/range';
+import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { IChange, ILineChange } from 'vs/editor/common/editorCommon';
 import { IInplaceReplaceSupportResult, TextEdit } from 'vs/editor/common/modes';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { IRange } from 'vs/editor/common/core/range';
 
 export const ID_EDITOR_WORKER_SERVICE = 'editorWorkerService';
 export const IEditorWorkerService = createDecorator<IEditorWorkerService>(ID_EDITOR_WORKER_SERVICE);
 
 export interface IDiffComputationResult {
-	quitEarly: boolean;
 	identical: boolean;
 	changes: ILineChange[];
 }
 
 export interface IEditorWorkerService {
-	readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	canComputeDiff(original: URI, modified: URI): boolean;
-	computeDiff(original: URI, modified: URI, ignoreTrimWhitespace: boolean, maxComputationTime: number): Promise<IDiffComputationResult | null>;
+	computeDiff(original: URI, modified: URI, ignoreTrimWhitespace: boolean): Promise<IDiffComputationResult | null>;
 
 	canComputeDirtyDiff(original: URI, modified: URI): boolean;
 	computeDirtyDiff(original: URI, modified: URI, ignoreTrimWhitespace: boolean): Promise<IChange[] | null>;
 
-	computeMoreMinimalEdits(resource: URI, edits: TextEdit[] | null | undefined): Promise<TextEdit[] | undefined>;
+	computeMoreMinimalEdits(resource: URI, edits: TextEdit[]): Promise<TextEdit[]>;
 
 	canComputeWordRanges(resource: URI): boolean;
 	computeWordRanges(resource: URI, range: IRange): Promise<{ [word: string]: IRange[] } | null>;

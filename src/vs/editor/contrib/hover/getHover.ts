@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { coalesce } from 'vs/base/common/arrays';
-import { CancellationToken } from 'vs/base/common/cancellation';
 import { onUnexpectedExternalError } from 'vs/base/common/errors';
-import { registerModelAndPositionCommand } from 'vs/editor/browser/editorExtensions';
-import { Position } from 'vs/editor/common/core/position';
 import { ITextModel } from 'vs/editor/common/model';
+import { registerDefaultLanguageCommand } from 'vs/editor/browser/editorExtensions';
 import { Hover, HoverProviderRegistry } from 'vs/editor/common/modes';
+import { Position } from 'vs/editor/common/core/position';
+import { CancellationToken } from 'vs/base/common/cancellation';
 
 export function getHover(model: ITextModel, position: Position, token: CancellationToken): Promise<Hover[]> {
 
@@ -27,7 +27,7 @@ export function getHover(model: ITextModel, position: Position, token: Cancellat
 	return Promise.all(promises).then(coalesce);
 }
 
-registerModelAndPositionCommand('_executeHoverProvider', (model, position) => getHover(model, position, CancellationToken.None));
+registerDefaultLanguageCommand('_executeHoverProvider', (model, position) => getHover(model, position, CancellationToken.None));
 
 function isValid(result: Hover) {
 	const hasRange = (typeof result.range !== 'undefined');

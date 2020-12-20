@@ -15,7 +15,7 @@ import { CharCode } from 'vs/base/common/charCode';
  * - forEach() over the result to get the lines
  */
 export class LineDecoder {
-	private stringDecoder: sd.StringDecoder;
+	private stringDecoder: sd.NodeStringDecoder;
 	private remaining: string | null;
 
 	constructor(encoding: string = 'utf8') {
@@ -23,9 +23,9 @@ export class LineDecoder {
 		this.remaining = null;
 	}
 
-	write(buffer: Buffer): string[] {
-		const result: string[] = [];
-		const value = this.remaining
+	public write(buffer: Buffer): string[] {
+		let result: string[] = [];
+		let value = this.remaining
 			? this.remaining + this.stringDecoder.write(buffer)
 			: this.stringDecoder.write(buffer);
 
@@ -41,7 +41,7 @@ export class LineDecoder {
 				result.push(value.substring(start, idx));
 				idx++;
 				if (idx < value.length) {
-					const lastChar = ch;
+					let lastChar = ch;
 					ch = value.charCodeAt(idx);
 					if ((lastChar === CharCode.CarriageReturn && ch === CharCode.LineFeed) || (lastChar === CharCode.LineFeed && ch === CharCode.CarriageReturn)) {
 						idx++;
@@ -56,7 +56,7 @@ export class LineDecoder {
 		return result;
 	}
 
-	end(): string | null {
+	public end(): string | null {
 		return this.remaining;
 	}
 }

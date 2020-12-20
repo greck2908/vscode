@@ -4,33 +4,32 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./iPadShowKeyboard';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import * as browser from 'vs/base/browser/browser';
 import * as dom from 'vs/base/browser/dom';
-import { Disposable } from 'vs/base/common/lifecycle';
+import { IEditorContribution } from 'vs/editor/common/editorCommon';
 import { ICodeEditor, IOverlayWidget, IOverlayWidgetPosition, OverlayWidgetPositionPreference } from 'vs/editor/browser/editorBrowser';
 import { registerEditorContribution } from 'vs/editor/browser/editorExtensions';
-import { IEditorContribution } from 'vs/editor/common/editorCommon';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
-export class IPadShowKeyboard extends Disposable implements IEditorContribution {
+export class IPadShowKeyboard implements IEditorContribution {
 
-	public static readonly ID = 'editor.contrib.iPadShowKeyboard';
+	private static readonly ID = 'editor.contrib.iPadShowKeyboard';
 
-	private readonly editor: ICodeEditor;
+	private editor: ICodeEditor;
 	private widget: ShowKeyboardWidget | null;
+	private toDispose: IDisposable[];
 
 	constructor(editor: ICodeEditor) {
-		super();
 		this.editor = editor;
-		this.widget = null;
+		this.toDispose = [];
 		if (browser.isIPad) {
-			this._register(editor.onDidChangeConfiguration(() => this.update()));
+			this.toDispose.push(editor.onDidChangeConfiguration(() => this.update()));
 			this.update();
 		}
 	}
 
 	private update(): void {
-		const shouldHaveWidget = (!this.editor.getOption(EditorOption.readOnly));
+		const shouldHaveWidget = (!this.editor.getConfiguration().readOnly);
 
 		if (!this.widget && shouldHaveWidget) {
 
@@ -44,8 +43,12 @@ export class IPadShowKeyboard extends Disposable implements IEditorContribution 
 		}
 	}
 
+	public getId(): string {
+		return IPadShowKeyboard.ID;
+	}
+
 	public dispose(): void {
-		super.dispose();
+		this.toDispose = dispose(this.toDispose);
 		if (this.widget) {
 			this.widget.dispose();
 			this.widget = null;
@@ -53,24 +56,25 @@ export class IPadShowKeyboard extends Disposable implements IEditorContribution 
 	}
 }
 
-class ShowKeyboardWidget extends Disposable implements IOverlayWidget {
+class ShowKeyboardWidget implements IOverlayWidget {
 
 	private static readonly ID = 'editor.contrib.ShowKeyboardWidget';
 
-	private readonly editor: ICodeEditor;
+	private editor: ICodeEditor;
 
-	private readonly _domNode: HTMLElement;
+	private _domNode: HTMLElement;
+	private _toDispose: IDisposable[];
 
 	constructor(editor: ICodeEditor) {
-		super();
 		this.editor = editor;
 		this._domNode = document.createElement('textarea');
 		this._domNode.className = 'iPadShowKeyboard';
 
-		this._register(dom.addDisposableListener(this._domNode, 'touchstart', (e) => {
+		this._toDispose = [];
+		this._toDispose.push(dom.addDisposableListener(this._domNode, 'touchstart', (e) => {
 			this.editor.focus();
 		}));
-		this._register(dom.addDisposableListener(this._domNode, 'focus', (e) => {
+		this._toDispose.push(dom.addDisposableListener(this._domNode, 'focus', (e) => {
 			this.editor.focus();
 		}));
 
@@ -79,7 +83,7 @@ class ShowKeyboardWidget extends Disposable implements IOverlayWidget {
 
 	public dispose(): void {
 		this.editor.removeOverlayWidget(this);
-		super.dispose();
+		this._toDispose = dispose(this._toDispose);
 	}
 
 	// ----- IOverlayWidget API
@@ -99,4 +103,4 @@ class ShowKeyboardWidget extends Disposable implements IOverlayWidget {
 	}
 }
 
-registerEditorContribution(IPadShowKeyboard.ID, IPadShowKeyboard);
+registerEditorContribution(IPadShowKeyboard);

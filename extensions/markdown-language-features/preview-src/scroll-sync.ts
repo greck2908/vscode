@@ -5,7 +5,6 @@
 
 import { getSettings } from './settings';
 
-const codeLineClass = 'code-line';
 
 function clamp(min: number, max: number, value: number) {
 	return Math.min(max, Math.max(min, value));
@@ -25,21 +24,13 @@ const getCodeLineElements = (() => {
 	let elements: CodeLineElement[];
 	return () => {
 		if (!elements) {
-			elements = [{ element: document.body, line: 0 }];
-			for (const element of document.getElementsByClassName(codeLineClass)) {
-				const line = +element.getAttribute('data-line')!;
-				if (isNaN(line)) {
-					continue;
-				}
-
-				if (element.tagName === 'CODE' && element.parentElement && element.parentElement.tagName === 'PRE') {
-					// Fenched code blocks are a special case since the `code-line` can only be marked on
-					// the `<code>` element and not the parent `<pre>` element.
-					elements.push({ element: element.parentElement as HTMLElement, line });
-				} else {
-					elements.push({ element: element as HTMLElement, line });
-				}
-			}
+			elements = Array.prototype.map.call(
+				document.getElementsByClassName('code-line'),
+				(element: any) => {
+					const line = +element.getAttribute('data-line');
+					return { element, line };
+				})
+				.filter((x: any) => !isNaN(x.line));
 		}
 		return elements;
 	};
@@ -58,7 +49,8 @@ export function getElementsForSourceLine(targetLine: number): { previous: CodeLi
 	for (const entry of lines) {
 		if (entry.line === lineNumber) {
 			return { previous: entry, next: undefined };
-		} else if (entry.line > lineNumber) {
+		}
+		else if (entry.line > lineNumber) {
 			return { previous, next: entry };
 		}
 		previous = entry;
@@ -76,7 +68,7 @@ export function getLineElementsAtPageOffset(offset: number): { previous: CodeLin
 	let hi = lines.length - 1;
 	while (lo + 1 < hi) {
 		const mid = Math.floor((lo + hi) / 2);
-		const bounds = getElementBounds(lines[mid]);
+		const bounds = lines[mid].element.getBoundingClientRect();
 		if (bounds.top + bounds.height >= position) {
 			hi = mid;
 		}
@@ -85,90 +77,51 @@ export function getLineElementsAtPageOffset(offset: number): { previous: CodeLin
 		}
 	}
 	const hiElement = lines[hi];
-	const hiBounds = getElementBounds(hiElement);
+	const hiBounds = hiElement.element.getBoundingClientRect();
 	if (hi >= 1 && hiBounds.top > position) {
 		const loElement = lines[lo];
 		return { previous: loElement, next: hiElement };
 	}
-	if (hi > 1 && hi < lines.length && hiBounds.top + hiBounds.height > position) {
-		return { previous: hiElement, next: lines[hi + 1] };
-	}
 	return { previous: hiElement };
-}
-
-function getElementBounds({ element }: CodeLineElement): { top: number, height: number } {
-	const myBounds = element.getBoundingClientRect();
-
-	// Some code line elements may contain other code line elements.
-	// In those cases, only take the height up to that child.
-	const codeLineChild = element.querySelector(`.${codeLineClass}`);
-	if (codeLineChild) {
-		const childBounds = codeLineChild.getBoundingClientRect();
-		const height = Math.max(1, (childBounds.top - myBounds.top));
-		return {
-			top: myBounds.top,
-			height: height
-		};
-	}
-
-	return myBounds;
 }
 
 /**
  * Attempt to reveal the element for a source line in the editor.
  */
 export function scrollToRevealSourceLine(line: number) {
-	if (!getSettings().scrollPreviewWithEditor) {
-		return;
-	}
-
-	if (line <= 0) {
-		window.scroll(window.scrollX, 0);
-		return;
-	}
-
 	const { previous, next } = getElementsForSourceLine(line);
-	if (!previous) {
-		return;
+	if (previous && getSettings().scrollPreviewWithEditor) {
+		let scrollTo = 0;
+		const rect = previous.element.getBoundingClientRect();
+		const previousTop = rect.top;
+		if (next && next.line !== previous.line) {
+			// Between two elements. Go to percentage offset between them.
+			const betweenProgress = (line - previous.line) / (next.line - previous.line);
+			const elementOffset = next.element.getBoundingClientRect().top - previousTop;
+			scrollTo = previousTop + betweenProgress * elementOffset;
+		}
+		else {
+			scrollTo = previousTop;
+		}
+		window.scroll(0, Math.max(1, window.scrollY + scrollTo));
 	}
-	let scrollTo = 0;
-	const rect = getElementBounds(previous);
-	const previousTop = rect.top;
-	if (next && next.line !== previous.line) {
-		// Between two elements. Go to percentage offset between them.
-		const betweenProgress = (line - previous.line) / (next.line - previous.line);
-		const elementOffset = next.element.getBoundingClientRect().top - previousTop;
-		scrollTo = previousTop + betweenProgress * elementOffset;
-	} else {
-		const progressInElement = line - Math.floor(line);
-		scrollTo = previousTop + (rect.height * progressInElement);
-	}
-	window.scroll(window.scrollX, Math.max(1, window.scrollY + scrollTo));
 }
 
 export function getEditorLineNumberForPageOffset(offset: number) {
 	const { previous, next } = getLineElementsAtPageOffset(offset);
 	if (previous) {
-		const previousBounds = getElementBounds(previous);
+		const previousBounds = previous.element.getBoundingClientRect();
 		const offsetFromPrevious = (offset - window.scrollY - previousBounds.top);
 		if (next) {
-			const progressBetweenElements = offsetFromPrevious / (getElementBounds(next).top - previousBounds.top);
+			const progressBetweenElements = offsetFromPrevious / (next.element.getBoundingClientRect().top - previousBounds.top);
 			const line = previous.line + progressBetweenElements * (next.line - previous.line);
 			return clampLine(line);
-		} else {
+		}
+		else {
 			const progressWithinElement = offsetFromPrevious / (previousBounds.height);
 			const line = previous.line + progressWithinElement;
 			return clampLine(line);
 		}
 	}
 	return null;
-}
-
-/**
- * Try to find the html element by using a fragment id
- */
-export function getLineElementForFragment(fragment: string): CodeLineElement | undefined {
-	return getCodeLineElements().find((element) => {
-		return element.element.id === fragment;
-	});
 }

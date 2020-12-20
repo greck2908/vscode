@@ -3,38 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { StandardWheelEvent } from 'vs/base/browser/mouseEvent';
-import { AbstractScrollbar, ISimplifiedMouseEvent, ScrollbarHost } from 'vs/base/browser/ui/scrollbar/abstractScrollbar';
+import { AbstractScrollbar, ScrollbarHost, ISimplifiedMouseEvent } from 'vs/base/browser/ui/scrollbar/abstractScrollbar';
+import { StandardMouseWheelEvent } from 'vs/base/browser/mouseEvent';
 import { ScrollableElementResolvedOptions } from 'vs/base/browser/ui/scrollbar/scrollableElementOptions';
-import { ARROW_IMG_SIZE } from 'vs/base/browser/ui/scrollbar/scrollbarArrow';
+import { Scrollable, ScrollEvent, ScrollbarVisibility, INewScrollPosition } from 'vs/base/common/scrollable';
 import { ScrollbarState } from 'vs/base/browser/ui/scrollbar/scrollbarState';
-import { INewScrollPosition, ScrollEvent, Scrollable, ScrollbarVisibility } from 'vs/base/common/scrollable';
-import { Codicon, registerCodicon } from 'vs/base/common/codicons';
-
-
-const scrollbarButtonLeftIcon = registerCodicon('scrollbar-button-left', Codicon.triangleLeft);
-const scrollbarButtonRightIcon = registerCodicon('scrollbar-button-right', Codicon.triangleRight);
+import { ARROW_IMG_SIZE } from 'vs/base/browser/ui/scrollbar/scrollbarArrow';
 
 export class HorizontalScrollbar extends AbstractScrollbar {
 
 	constructor(scrollable: Scrollable, options: ScrollableElementResolvedOptions, host: ScrollbarHost) {
-		const scrollDimensions = scrollable.getScrollDimensions();
-		const scrollPosition = scrollable.getCurrentScrollPosition();
 		super({
 			lazyRender: options.lazyRender,
 			host: host,
 			scrollbarState: new ScrollbarState(
 				(options.horizontalHasArrows ? options.arrowSize : 0),
 				(options.horizontal === ScrollbarVisibility.Hidden ? 0 : options.horizontalScrollbarSize),
-				(options.vertical === ScrollbarVisibility.Hidden ? 0 : options.verticalScrollbarSize),
-				scrollDimensions.width,
-				scrollDimensions.scrollWidth,
-				scrollPosition.scrollLeft
+				(options.vertical === ScrollbarVisibility.Hidden ? 0 : options.verticalScrollbarSize)
 			),
 			visibility: options.horizontal,
 			extraScrollbarClassName: 'horizontal',
-			scrollable: scrollable,
-			scrollByPage: options.scrollByPage
+			scrollable: scrollable
 		});
 
 		if (options.horizontalHasArrows) {
@@ -42,27 +31,25 @@ export class HorizontalScrollbar extends AbstractScrollbar {
 			let scrollbarDelta = (options.horizontalScrollbarSize - ARROW_IMG_SIZE) / 2;
 
 			this._createArrow({
-				className: 'scra',
-				icon: scrollbarButtonLeftIcon,
+				className: 'left-arrow',
 				top: scrollbarDelta,
 				left: arrowDelta,
-				bottom: undefined,
-				right: undefined,
+				bottom: void 0,
+				right: void 0,
 				bgWidth: options.arrowSize,
 				bgHeight: options.horizontalScrollbarSize,
-				onActivate: () => this._host.onMouseWheel(new StandardWheelEvent(null, 1, 0)),
+				onActivate: () => this._host.onMouseWheel(new StandardMouseWheelEvent(null, 1, 0)),
 			});
 
 			this._createArrow({
-				className: 'scra',
-				icon: scrollbarButtonRightIcon,
+				className: 'right-arrow',
 				top: scrollbarDelta,
-				left: undefined,
-				bottom: undefined,
+				left: void 0,
+				bottom: void 0,
 				right: arrowDelta,
 				bgWidth: options.arrowSize,
 				bgHeight: options.horizontalScrollbarSize,
-				onActivate: () => this._host.onMouseWheel(new StandardWheelEvent(null, -1, 0)),
+				onActivate: () => this._host.onMouseWheel(new StandardMouseWheelEvent(null, -1, 0)),
 			});
 		}
 
@@ -98,10 +85,6 @@ export class HorizontalScrollbar extends AbstractScrollbar {
 
 	protected _sliderOrthogonalMousePosition(e: ISimplifiedMouseEvent): number {
 		return e.posy;
-	}
-
-	protected _updateScrollbarSize(size: number): void {
-		this.slider.setHeight(size);
 	}
 
 	public writeScrollPosition(target: INewScrollPosition, scrollPosition: number): void {

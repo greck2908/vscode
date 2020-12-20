@@ -17,7 +17,7 @@ export class InitializingRangeProvider implements RangeProvider {
 	private decorationIds: string[] | undefined;
 	private timeout: any;
 
-	constructor(private readonly editorModel: ITextModel, initialRanges: ILineRange[], onTimeout: () => void, timeoutTime: number) {
+	constructor(private editorModel: ITextModel, initialRanges: ILineRange[], onTimeout: () => void, timeoutTime: number) {
 		if (initialRanges.length) {
 			let toDecorationRange = (range: ILineRange): IModelDeltaDecoration => {
 				return {
@@ -40,15 +40,15 @@ export class InitializingRangeProvider implements RangeProvider {
 	dispose(): void {
 		if (this.decorationIds) {
 			this.editorModel.deltaDecorations(this.decorationIds, []);
-			this.decorationIds = undefined;
+			this.decorationIds = void 0;
 		}
 		if (typeof this.timeout === 'number') {
 			clearTimeout(this.timeout);
-			this.timeout = undefined;
+			this.timeout = void 0;
 		}
 	}
 
-	compute(cancelationToken: CancellationToken): Promise<FoldingRegions> {
+	compute(cancelationToken: CancellationToken): Thenable<FoldingRegions> {
 		let foldingRangeData: IFoldingRangeData[] = [];
 		if (this.decorationIds) {
 			for (let id of this.decorationIds) {

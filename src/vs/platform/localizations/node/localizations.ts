@@ -7,15 +7,17 @@ import * as pfs from 'vs/base/node/pfs';
 import { createHash } from 'crypto';
 import { IExtensionManagementService, ILocalExtension, IExtensionIdentifier } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { Disposable } from 'vs/base/common/lifecycle';
-import { INativeEnvironmentService } from 'vs/platform/environment/common/environment';
-import { Queue } from 'vs/base/common/async';
-import { areSameExtensions } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { Limiter } from 'vs/base/common/async';
+import { areSameExtensions, getGalleryExtensionIdFromLocal, getIdFromLocalExtensionId } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
 import { ILogService } from 'vs/platform/log/common/log';
-import { isValidLocalization, ILocalizationsService } from 'vs/platform/localizations/common/localizations';
+import { isValidLocalization, ILocalizationsService, LanguageType } from 'vs/platform/localizations/common/localizations';
+import product from 'vs/platform/node/product';
 import { distinct, equals } from 'vs/base/common/arrays';
 import { Event, Emitter } from 'vs/base/common/event';
 import { Schemas } from 'vs/base/common/network';
-import { join } from 'vs/base/common/path';
+import { posix } from 'path';
 
 interface ILanguagePack {
 	hash: string;
@@ -26,9 +28,14 @@ interface ILanguagePack {
 	translations: { [id: string]: string };
 }
 
+const systemLanguages: string[] = ['de', 'en', 'en-US', 'es', 'fr', 'it', 'ja', 'ko', 'ru', 'zh-CN', 'zh-TW'];
+if (product.quality !== 'stable') {
+	systemLanguages.push('hu');
+}
+
 export class LocalizationsService extends Disposable implements ILocalizationsService {
 
-	declare readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private readonly cache: LanguagePacksCache;
 
@@ -36,47 +43,56 @@ export class LocalizationsService extends Disposable implements ILocalizationsSe
 	readonly onDidLanguagesChange: Event<void> = this._onDidLanguagesChange.event;
 
 	constructor(
-		@IExtensionManagementService private readonly extensionManagementService: IExtensionManagementService,
-		@INativeEnvironmentService environmentService: INativeEnvironmentService,
-		@ILogService private readonly logService: ILogService
+		@IExtensionManagementService private extensionManagementService: IExtensionManagementService,
+		@IEnvironmentService environmentService: IEnvironmentService,
+		@ILogService private logService: ILogService
 	) {
 		super();
 		this.cache = this._register(new LanguagePacksCache(environmentService, logService));
 
 		this._register(extensionManagementService.onDidInstallExtension(({ local }) => this.onDidInstallExtension(local)));
 		this._register(extensionManagementService.onDidUninstallExtension(({ identifier }) => this.onDidUninstallExtension(identifier)));
+
+		this.extensionManagementService.getInstalled().then(installed => this.cache.update(installed));
 	}
 
-	getLanguageIds(): Promise<string[]> {
+	getLanguageIds(type: LanguageType): TPromise<string[]> {
+		if (type === LanguageType.Core) {
+			return TPromise.as([...systemLanguages]);
+		}
 		return this.cache.getLanguagePacks()
 			.then(languagePacks => {
-				// Contributed languages are those installed via extension packs, so does not include English
-				const languages = ['en', ...Object.keys(languagePacks)];
-				return distinct(languages);
+				const languages = type === LanguageType.Contributed ? Object.keys(languagePacks) : [...systemLanguages, ...Object.keys(languagePacks)];
+				return TPromise.as(distinct(languages));
 			});
 	}
 
-	private onDidInstallExtension(extension: ILocalExtension | undefined): void {
+	private onDidInstallExtension(extension: ILocalExtension): void {
 		if (extension && extension.manifest && extension.manifest.contributes && extension.manifest.contributes.localizations && extension.manifest.contributes.localizations.length) {
 			this.logService.debug('Adding language packs from the extension', extension.identifier.id);
-			this.update().then(changed => { if (changed) { this._onDidLanguagesChange.fire(); } });
+			this.update();
 		}
 	}
 
 	private onDidUninstallExtension(identifier: IExtensionIdentifier): void {
 		this.cache.getLanguagePacks()
 			.then(languagePacks => {
+				identifier = { id: getIdFromLocalExtensionId(identifier.id), uuid: identifier.uuid };
 				if (Object.keys(languagePacks).some(language => languagePacks[language] && languagePacks[language].extensions.some(e => areSameExtensions(e.extensionIdentifier, identifier)))) {
 					this.logService.debug('Removing language packs from the extension', identifier.id);
-					this.update().then(changed => { if (changed) { this._onDidLanguagesChange.fire(); } });
+					this.update();
 				}
 			});
 	}
 
-	update(): Promise<boolean> {
-		return Promise.all([this.cache.getLanguagePacks(), this.extensionManagementService.getInstalled()])
+	private update(): void {
+		TPromise.join([this.cache.getLanguagePacks(), this.extensionManagementService.getInstalled()])
 			.then(([current, installed]) => this.cache.update(installed)
-				.then(updated => !equals(Object.keys(current), Object.keys(updated))));
+				.then(updated => {
+					if (!equals(Object.keys(current), Object.keys(updated))) {
+						this._onDidLanguagesChange.fire();
+					}
+				}));
 	}
 }
 
@@ -84,30 +100,29 @@ class LanguagePacksCache extends Disposable {
 
 	private languagePacks: { [language: string]: ILanguagePack } = {};
 	private languagePacksFilePath: string;
-	private languagePacksFileLimiter: Queue<any>;
-	private initializedCache: boolean | undefined;
+	private languagePacksFileLimiter: Limiter<void>;
 
 	constructor(
-		@INativeEnvironmentService environmentService: INativeEnvironmentService,
-		@ILogService private readonly logService: ILogService
+		@IEnvironmentService environmentService: IEnvironmentService,
+		@ILogService private logService: ILogService
 	) {
 		super();
-		this.languagePacksFilePath = join(environmentService.userDataPath, 'languagepacks.json');
-		this.languagePacksFileLimiter = new Queue();
+		this.languagePacksFilePath = posix.join(environmentService.userDataPath, 'languagepacks.json');
+		this.languagePacksFileLimiter = new Limiter(1);
 	}
 
-	getLanguagePacks(): Promise<{ [language: string]: ILanguagePack }> {
+	getLanguagePacks(): TPromise<{ [language: string]: ILanguagePack }> {
 		// if queue is not empty, fetch from disk
-		if (this.languagePacksFileLimiter.size || !this.initializedCache) {
+		if (this.languagePacksFileLimiter.size) {
 			return this.withLanguagePacks()
 				.then(() => this.languagePacks);
 		}
-		return Promise.resolve(this.languagePacks);
+		return TPromise.as(this.languagePacks);
 	}
 
-	update(extensions: ILocalExtension[]): Promise<{ [language: string]: ILanguagePack }> {
+	update(extensions: ILocalExtension[]): TPromise<{ [language: string]: ILanguagePack }> {
 		return this.withLanguagePacks(languagePacks => {
-			Object.keys(languagePacks).forEach(language => delete languagePacks[language]);
+			Object.keys(languagePacks).forEach(language => languagePacks[language] = undefined);
 			this.createLanguagePacksFromExtensions(languagePacks, ...extensions);
 		}).then(() => this.languagePacks);
 	}
@@ -122,9 +137,8 @@ class LanguagePacksCache extends Disposable {
 	}
 
 	private createLanguagePacksFromExtension(languagePacks: { [language: string]: ILanguagePack }, extension: ILocalExtension): void {
-		const extensionIdentifier = extension.identifier;
-		const localizations = extension.manifest.contributes && extension.manifest.contributes.localizations ? extension.manifest.contributes.localizations : [];
-		for (const localizationContribution of localizations) {
+		const extensionIdentifier = { id: getGalleryExtensionIdFromLocal(extension), uuid: extension.identifier.uuid };
+		for (const localizationContribution of extension.manifest.contributes.localizations) {
 			if (extension.location.scheme === Schemas.file && isValidLocalization(localizationContribution)) {
 				let languagePack = languagePacks[localizationContribution.languageId];
 				if (!languagePack) {
@@ -138,7 +152,7 @@ class LanguagePacksCache extends Disposable {
 					languagePack.extensions.push({ extensionIdentifier, version: extension.manifest.version });
 				}
 				for (const translation of localizationContribution.translations) {
-					languagePack.translations[translation.id] = join(extension.location.fsPath, translation.path);
+					languagePack.translations[translation.id] = posix.join(extension.location.fsPath, translation.path);
 				}
 			}
 		}
@@ -154,11 +168,11 @@ class LanguagePacksCache extends Disposable {
 		}
 	}
 
-	private withLanguagePacks<T>(fn: (languagePacks: { [language: string]: ILanguagePack }) => T | null = () => null): Promise<T> {
+	private withLanguagePacks<T>(fn: (languagePacks: { [language: string]: ILanguagePack }) => T = () => null): TPromise<T> {
 		return this.languagePacksFileLimiter.queue(() => {
 			let result: T | null = null;
 			return pfs.readFile(this.languagePacksFilePath, 'utf8')
-				.then(undefined, err => err.code === 'ENOENT' ? Promise.resolve('{}') : Promise.reject(err))
+				.then(null, err => err.code === 'ENOENT' ? TPromise.as('{}') : TPromise.wrapError(err))
 				.then<{ [language: string]: ILanguagePack }>(raw => { try { return JSON.parse(raw); } catch (e) { return {}; } })
 				.then(languagePacks => { result = fn(languagePacks); return languagePacks; })
 				.then(languagePacks => {
@@ -168,7 +182,6 @@ class LanguagePacksCache extends Disposable {
 						}
 					}
 					this.languagePacks = languagePacks;
-					this.initializedCache = true;
 					const raw = JSON.stringify(this.languagePacks);
 					this.logService.debug('Writing language packs', raw);
 					return pfs.writeFile(this.languagePacksFilePath, raw);

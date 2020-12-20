@@ -18,18 +18,20 @@ export interface IDecorationData {
 	readonly letter?: string;
 	readonly tooltip?: string;
 	readonly bubble?: boolean;
+	readonly source?: string;
 }
 
-export interface IDecoration extends IDisposable {
+export interface IDecoration {
 	readonly tooltip: string;
 	readonly labelClassName: string;
 	readonly badgeClassName: string;
+	update(data: IDecorationData): IDecoration;
 }
 
 export interface IDecorationsProvider {
 	readonly label: string;
-	readonly onDidChange: Event<readonly URI[]>;
-	provideDecorations(uri: URI, token: CancellationToken): IDecorationData | Promise<IDecorationData | undefined> | undefined;
+	readonly onDidChange: Event<URI[]>;
+	provideDecorations(uri: URI, token: CancellationToken): IDecorationData | Thenable<IDecorationData>;
 }
 
 export interface IResourceDecorationChangeEvent {
@@ -38,11 +40,11 @@ export interface IResourceDecorationChangeEvent {
 
 export interface IDecorationsService {
 
-	readonly _serviceBrand: undefined;
+	readonly _serviceBrand: any;
 
 	readonly onDidChangeDecorations: Event<IResourceDecorationChangeEvent>;
 
 	registerDecorationsProvider(provider: IDecorationsProvider): IDisposable;
 
-	getDecoration(uri: URI, includeChildren: boolean): IDecoration | undefined;
+	getDecoration(uri: URI, includeChildren: boolean, overwrite?: IDecorationData): IDecoration;
 }

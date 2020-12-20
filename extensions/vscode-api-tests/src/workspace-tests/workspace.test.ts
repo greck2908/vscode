@@ -8,23 +8,23 @@ import * as vscode from 'vscode';
 import { closeAllEditors, pathEquals } from '../utils';
 import { join } from 'path';
 
-suite('vscode API - workspace', () => {
+suite('workspace-namespace', () => {
 
 	teardown(closeAllEditors);
 
 	test('rootPath', () => {
-		assert.ok(pathEquals(vscode.workspace.rootPath!, join(__dirname, '../../testWorkspace')));
-	});
-
-	test('workspaceFile', () => {
-		assert.ok(pathEquals(vscode.workspace.workspaceFile!.fsPath, join(__dirname, '../../testworkspace.code-workspace')));
+		if (vscode.workspace.rootPath) {
+			assert.ok(pathEquals(vscode.workspace.rootPath, join(__dirname, '../../testWorkspace')));
+		}
 	});
 
 	test('workspaceFolders', () => {
-		assert.equal(vscode.workspace.workspaceFolders!.length, 2);
-		assert.ok(pathEquals(vscode.workspace.workspaceFolders![0].uri.fsPath, join(__dirname, '../../testWorkspace')));
-		assert.ok(pathEquals(vscode.workspace.workspaceFolders![1].uri.fsPath, join(__dirname, '../../testWorkspace2')));
-		assert.ok(pathEquals(vscode.workspace.workspaceFolders![1].name, 'Test Workspace 2'));
+		if (vscode.workspace.workspaceFolders) {
+			assert.equal(vscode.workspace.workspaceFolders.length, 2);
+			assert.ok(pathEquals(vscode.workspace.workspaceFolders[0].uri.fsPath, join(__dirname, '../../testWorkspace')));
+			assert.ok(pathEquals(vscode.workspace.workspaceFolders[1].uri.fsPath, join(__dirname, '../../testWorkspace2')));
+			assert.ok(pathEquals(vscode.workspace.workspaceFolders[1].name, 'Test Workspace 2'));
+		}
 	});
 
 	test('getWorkspaceFolder', () => {

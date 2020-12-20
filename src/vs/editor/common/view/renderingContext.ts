@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Position } from 'vs/editor/common/core/position';
-import { Range } from 'vs/editor/common/core/range';
-import { ViewportData } from 'vs/editor/common/viewLayout/viewLinesViewportData';
 import { IViewLayout, ViewModelDecoration } from 'vs/editor/common/viewModel/viewModel';
+import { ViewportData } from 'vs/editor/common/viewLayout/viewLinesViewportData';
+import { Range } from 'vs/editor/common/core/range';
+import { Position } from 'vs/editor/common/core/position';
 
 export interface IViewLines {
 	linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null;
-	visibleRangeForPosition(position: Position): HorizontalPosition | null;
+	visibleRangeForPosition(position: Position): HorizontalRange | null;
 }
 
 export abstract class RestrictedRenderingContext {
@@ -77,20 +77,26 @@ export class RenderingContext extends RestrictedRenderingContext {
 		return this._viewLines.linesVisibleRangesForRange(range, includeNewLines);
 	}
 
-	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
+	public visibleRangeForPosition(position: Position): HorizontalRange | null {
 		return this._viewLines.visibleRangeForPosition(position);
 	}
 }
 
 export class LineVisibleRanges {
-	constructor(
-		public readonly outsideRenderedLine: boolean,
-		public readonly lineNumber: number,
-		public readonly ranges: HorizontalRange[]
-	) { }
+	_lineVisibleRangesBrand: void;
+
+	public lineNumber: number;
+	public ranges: HorizontalRange[];
+
+	constructor(lineNumber: number, ranges: HorizontalRange[]) {
+		this.lineNumber = lineNumber;
+		this.ranges = ranges;
+	}
 }
 
 export class HorizontalRange {
+	_horizontalRangeBrand: void;
+
 	public left: number;
 	public width: number;
 
@@ -101,23 +107,5 @@ export class HorizontalRange {
 
 	public toString(): string {
 		return `[${this.left},${this.width}]`;
-	}
-}
-
-export class HorizontalPosition {
-	public outsideRenderedLine: boolean;
-	public left: number;
-
-	constructor(outsideRenderedLine: boolean, left: number) {
-		this.outsideRenderedLine = outsideRenderedLine;
-		this.left = Math.round(left);
-	}
-}
-
-export class VisibleRanges {
-	constructor(
-		public readonly outsideRenderedLine: boolean,
-		public readonly ranges: HorizontalRange[]
-	) {
 	}
 }

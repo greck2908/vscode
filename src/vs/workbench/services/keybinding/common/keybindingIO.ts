@@ -4,22 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { SimpleKeybinding } from 'vs/base/common/keyCodes';
-import { KeybindingParser } from 'vs/base/common/keybindingParser';
-import { ScanCodeBinding } from 'vs/base/common/scanCode';
-import { ContextKeyExpr, ContextKeyExpression } from 'vs/platform/contextkey/common/contextkey';
+import { OperatingSystem } from 'vs/base/common/platform';
 import { IUserFriendlyKeybinding } from 'vs/platform/keybinding/common/keybinding';
+import { ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
 import { ResolvedKeybindingItem } from 'vs/platform/keybinding/common/resolvedKeybindingItem';
+import { ScanCodeBinding } from 'vs/base/common/scanCode';
+import { KeybindingParser } from 'vs/base/common/keybindingParser';
 
 export interface IUserKeybindingItem {
-	parts: (SimpleKeybinding | ScanCodeBinding)[];
+	firstPart: SimpleKeybinding | ScanCodeBinding | null;
+	chordPart: SimpleKeybinding | ScanCodeBinding | null;
 	command: string | null;
 	commandArgs?: any;
-	when: ContextKeyExpression | undefined;
+	when: ContextKeyExpr | null;
 }
 
 export class KeybindingIO {
 
-	public static writeKeybindingItem(out: OutputBuilder, item: ResolvedKeybindingItem): void {
+	public static writeKeybindingItem(out: OutputBuilder, item: ResolvedKeybindingItem, OS: OperatingSystem): void {
 		if (!item.resolvedKeybinding) {
 			return;
 		}
@@ -31,25 +33,22 @@ export class KeybindingIO {
 		if (quotedSerializedWhen.length > 0) {
 			out.write(`${quotedSerializeCommand},`);
 			out.writeLine();
-			out.write(`                                     "when": ${quotedSerializedWhen}`);
+			out.write(`                                     "when": ${quotedSerializedWhen} `);
 		} else {
-			out.write(`${quotedSerializeCommand}`);
+			out.write(`${quotedSerializeCommand} `);
 		}
-		if (item.commandArgs) {
-			out.write(',');
-			out.writeLine();
-			out.write(`                                     "args": ${JSON.stringify(item.commandArgs)}`);
-		}
-		out.write(' }');
+		// out.write(String(item.weight1 + '-' + item.weight2));
+		out.write('}');
 	}
 
-	public static readUserKeybindingItem(input: IUserFriendlyKeybinding): IUserKeybindingItem {
-		const parts = (typeof input.key === 'string' ? KeybindingParser.parseUserBinding(input.key) : []);
-		const when = (typeof input.when === 'string' ? ContextKeyExpr.deserialize(input.when) : undefined);
+	public static readUserKeybindingItem(input: IUserFriendlyKeybinding, OS: OperatingSystem): IUserKeybindingItem {
+		const [firstPart, chordPart] = (typeof input.key === 'string' ? KeybindingParser.parseUserBinding(input.key) : [null, null]);
+		const when = (typeof input.when === 'string' ? ContextKeyExpr.deserialize(input.when) : null);
 		const command = (typeof input.command === 'string' ? input.command : null);
 		const commandArgs = (typeof input.args !== 'undefined' ? input.args : undefined);
 		return {
-			parts: parts,
+			firstPart: firstPart,
+			chordPart: chordPart,
 			command: command,
 			commandArgs: commandArgs,
 			when: when

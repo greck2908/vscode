@@ -4,7 +4,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.prepareIslFiles = exports.prepareI18nPackFiles = exports.pullI18nPackFiles = exports.prepareI18nFiles = exports.pullSetupXlfFiles = exports.pullCoreAndExtensionsXlfFiles = exports.findObsoleteResources = exports.pushXlfFiles = exports.createXlfFilesForIsl = exports.createXlfFilesForExtensions = exports.createXlfFilesForCoreBundle = exports.getResource = exports.processNlsFiles = exports.Limiter = exports.XLF = exports.Line = exports.externalExtensionsWithTranslations = exports.extraLanguages = exports.defaultLanguages = void 0;
 const path = require("path");
 const fs = require("fs");
 const event_stream_1 = require("event-stream");
@@ -14,16 +13,15 @@ const xml2js = require("xml2js");
 const glob = require("glob");
 const https = require("https");
 const gulp = require("gulp");
-const fancyLog = require("fancy-log");
-const ansiColors = require("ansi-colors");
-const iconv = require("iconv-lite-umd");
+const util = require("gulp-util");
+const iconv = require("iconv-lite");
 const NUMBER_OF_CONCURRENT_DOWNLOADS = 4;
 function log(message, ...rest) {
-    fancyLog(ansiColors.green('[i18n]'), message, ...rest);
+    util.log(util.colors.green('[i18n]'), message, ...rest);
 }
 exports.defaultLanguages = [
-    { id: 'zh-tw', folderName: 'cht', translationId: 'zh-hant' },
-    { id: 'zh-cn', folderName: 'chs', translationId: 'zh-hans' },
+    { id: 'zh-tw', folderName: 'cht', transifexId: 'zh-hant' },
+    { id: 'zh-cn', folderName: 'chs', transifexId: 'zh-hans' },
     { id: 'ja', folderName: 'jpn' },
     { id: 'ko', folderName: 'kor' },
     { id: 'de', folderName: 'deu' },
@@ -39,7 +37,7 @@ exports.extraLanguages = [
     { id: 'tr', folderName: 'trk' }
 ];
 // non built-in extensions also that are transifex and need to be part of the language packs
-exports.externalExtensionsWithTranslations = {
+const externalExtensionsWithTranslations = {
     'vscode-chrome-debug': 'msjsdiag.debugger-for-chrome',
     'vscode-node-debug': 'ms-vscode.node-debug',
     'vscode-node-debug2': 'ms-vscode.node-debug2'
@@ -113,7 +111,7 @@ class XLF {
         for (let file in this.files) {
             this.appendNewLine(`<file original="${file}" source-language="en" datatype="plaintext"><body>`, 2);
             for (let item of this.files[file]) {
-                this.addStringItem(file, item);
+                this.addStringItem(item);
             }
             this.appendNewLine('</body></file>', 2);
         }
@@ -153,12 +151,9 @@ class XLF {
             this.files[original].push({ id: realKey, message: message, comment: comment });
         }
     }
-    addStringItem(file, item) {
-        if (!item.id || item.message === undefined || item.message === null) {
-            throw new Error(`No item ID or value specified: ${JSON.stringify(item)}. File: ${file}`);
-        }
-        if (item.message.length === 0) {
-            log(`Item with id ${item.id} in file ${file} has an empty message.`);
+    addStringItem(item) {
+        if (!item.id || !item.message) {
+            throw new Error(`No item ID or value specified: ${JSON.stringify(item)}`);
         }
         this.appendNewLine(`<trans-unit id="${item.id}">`, 4);
         this.appendNewLine(`<source xml:lang="en">${item.message}</source>`, 6);
@@ -180,7 +175,6 @@ class XLF {
         this.buffer.push(line.toString());
     }
 }
-exports.XLF = XLF;
 XLF.parsePseudo = function (xlfString) {
     return new Promise((resolve) => {
         let parser = new xml2js.Parser();
@@ -235,15 +229,12 @@ XLF.parse = function (xlfString) {
                         if (!unit.target) {
                             return; // No translation available
                         }
-                        let val = unit.target[0];
-                        if (typeof val !== 'string') {
-                            val = val._;
-                        }
+                        const val = unit.target.toString();
                         if (key && val) {
                             messages[key] = decodeEntities(val);
                         }
                         else {
-                            reject(new Error(`XLF parsing error: XLIFF file ${originalFilePath} does not contain full localization data. ID or target translation for one of the trans-unit nodes is not present.`));
+                            reject(new Error(`XLF parsing error: XLIFF file does not contain full localization data. ID or target translation for one of the trans-unit nodes is not present.`));
                         }
                     });
                     files.push({ messages: messages, originalFilePath: originalFilePath, language: language.toLowerCase() });
@@ -253,6 +244,7 @@ XLF.parse = function (xlfString) {
         });
     });
 };
+exports.XLF = XLF;
 class Limiter {
     constructor(maxDegreeOfParalellism) {
         this.maxDegreeOfParalellism = maxDegreeOfParalellism;
@@ -376,11 +368,7 @@ function processCoreBundleFormat(fileHeader, languages, json, emitter) {
             }
         });
     });
-    let languageDirectory = path.join(__dirname, '..', '..', '..', 'vscode-loc', 'i18n');
-    if (!fs.existsSync(languageDirectory)) {
-        log(`No VS Code localization repository found. Looking at ${languageDirectory}`);
-        log(`To bundle translations please check out the vscode-loc repository as a sibling of the vscode repository.`);
-    }
+    let languageDirectory = path.join(__dirname, '..', '..', 'i18n');
     let sortedLanguages = sortLanguages(languages);
     sortedLanguages.forEach((language) => {
         if (process.env['VSCODE_BUILD_VERBOSE']) {
@@ -388,25 +376,22 @@ function processCoreBundleFormat(fileHeader, languages, json, emitter) {
         }
         statistics[language.id] = 0;
         let localizedModules = Object.create(null);
-        let languageFolderName = language.translationId || language.id;
-        let i18nFile = path.join(languageDirectory, `vscode-language-pack-${languageFolderName}`, 'translations', 'main.i18n.json');
-        let allMessages;
-        if (fs.existsSync(i18nFile)) {
-            let content = stripComments(fs.readFileSync(i18nFile, 'utf8'));
-            allMessages = JSON.parse(content);
-        }
+        let languageFolderName = language.folderName || language.id;
+        let cwd = path.join(languageDirectory, languageFolderName, 'src');
         modules.forEach((module) => {
             let order = keysSection[module];
-            let moduleMessage;
-            if (allMessages) {
-                moduleMessage = allMessages.contents[module];
+            let i18nFile = path.join(cwd, module) + '.i18n.json';
+            let messages = null;
+            if (fs.existsSync(i18nFile)) {
+                let content = stripComments(fs.readFileSync(i18nFile, 'utf8'));
+                messages = JSON.parse(content);
             }
-            if (!moduleMessage) {
+            else {
                 if (process.env['VSCODE_BUILD_VERBOSE']) {
                     log(`No localized messages found for module ${module}. Using default messages.`);
                 }
-                moduleMessage = defaultMessages[module];
-                statistics[language.id] = statistics[language.id] + Object.keys(moduleMessage).length;
+                messages = defaultMessages[module];
+                statistics[language.id] = statistics[language.id] + Object.keys(messages).length;
             }
             let localizedMessages = [];
             order.forEach((keyInfo) => {
@@ -417,7 +402,7 @@ function processCoreBundleFormat(fileHeader, languages, json, emitter) {
                 else {
                     key = keyInfo.key;
                 }
-                let message = moduleMessage[key];
+                let message = messages[key];
                 if (!message) {
                     if (process.env['VSCODE_BUILD_VERBOSE']) {
                         log(`No localized message found for key ${key} in module ${module}. Using default message.`);
@@ -500,7 +485,7 @@ function getResource(sourceFile) {
     else if (/^vs\/code/.test(sourceFile)) {
         return { name: 'vs/code', project: workbenchProject };
     }
-    else if (/^vs\/workbench\/contrib/.test(sourceFile)) {
+    else if (/^vs\/workbench\/parts/.test(sourceFile)) {
         resource = sourceFile.split('/', 4).join('/');
         return { name: resource, project: workbenchProject };
     }
@@ -584,7 +569,7 @@ function createXlfFilesForExtensions() {
             }
             return _xlf;
         }
-        gulp.src([`.build/extensions/${extensionName}/package.nls.json`, `.build/extensions/${extensionName}/**/nls.metadata.json`], { allowEmpty: true }).pipe(event_stream_1.through(function (file) {
+        gulp.src([`./extensions/${extensionName}/package.nls.json`, `./extensions/${extensionName}/**/nls.metadata.json`]).pipe(event_stream_1.through(function (file) {
             if (file.isBuffer()) {
                 const buffer = file.contents;
                 const basename = path.basename(file.path);
@@ -607,7 +592,7 @@ function createXlfFilesForExtensions() {
                 }
                 else if (basename === 'nls.metadata.json') {
                     const json = JSON.parse(buffer.toString('utf8'));
-                    const relPath = path.relative(`.build/extensions/${extensionName}`, path.dirname(file.path));
+                    const relPath = path.relative(`./extensions/${extensionName}`, path.dirname(file.path));
                     for (let file in json) {
                         const fileContent = json[file];
                         getXlf().addFile(`extensions/${extensionName}/${relPath}/${file}`, fileContent.keys, fileContent.messages);
@@ -758,7 +743,7 @@ function getAllResources(project, apiHostname, username, password) {
 }
 function findObsoleteResources(apiHostname, username, password) {
     let resourcesByProject = Object.create(null);
-    resourcesByProject[extensionsProject] = [].concat(exports.externalExtensionsWithTranslations); // clone
+    resourcesByProject[extensionsProject] = [].concat(externalExtensionsWithTranslations); // clone
     return event_stream_1.through(function (file) {
         const project = path.dirname(file.relative);
         const fileName = path.basename(file.path);
@@ -910,8 +895,8 @@ function pullCoreAndExtensionsXlfFiles(apiHostname, username, password, language
         _coreAndExtensionResources.push(...json.workbench);
         // extensions
         let extensionsToLocalize = Object.create(null);
-        glob.sync('.build/extensions/**/*.nls.json').forEach(extension => extensionsToLocalize[extension.split('/')[2]] = true);
-        glob.sync('.build/extensions/*/node_modules/vscode-nls').forEach(extension => extensionsToLocalize[extension.split('/')[2]] = true);
+        glob.sync('./extensions/**/*.nls.json').forEach(extension => extensionsToLocalize[extension.split('/')[2]] = true);
+        glob.sync('./extensions/*/node_modules/vscode-nls').forEach(extension => extensionsToLocalize[extension.split('/')[2]] = true);
         Object.keys(extensionsToLocalize).forEach(extension => {
             _coreAndExtensionResources.push({ name: extension, project: extensionsProject });
         });
@@ -961,7 +946,7 @@ function retrieveResource(language, resource, apiHostname, credentials) {
     return limiter.queue(() => new Promise((resolve, reject) => {
         const slug = resource.name.replace(/\//g, '_');
         const project = resource.project;
-        let transifexLanguageId = language.id === 'ps' ? 'en' : language.translationId || language.id;
+        let transifexLanguageId = language.id === 'ps' ? 'en' : language.transifexId || language.id;
         const options = {
             hostname: apiHostname,
             path: `/api/2/project/${project}/resource/${slug}/translation/${transifexLanguageId}?file&mode=onlyreviewed`,
@@ -1032,20 +1017,19 @@ function createI18nFile(originalFilePath, messages) {
         contents: Buffer.from(content, 'utf8')
     });
 }
-const i18nPackVersion = '1.0.0';
+const i18nPackVersion = "1.0.0";
 function pullI18nPackFiles(apiHostname, username, password, language, resultingTranslationPaths) {
-    return pullCoreAndExtensionsXlfFiles(apiHostname, username, password, language, exports.externalExtensionsWithTranslations)
-        .pipe(prepareI18nPackFiles(exports.externalExtensionsWithTranslations, resultingTranslationPaths, language.id === 'ps'));
+    return pullCoreAndExtensionsXlfFiles(apiHostname, username, password, language, externalExtensionsWithTranslations)
+        .pipe(prepareI18nPackFiles(externalExtensionsWithTranslations, resultingTranslationPaths, language.id === 'ps'));
 }
 exports.pullI18nPackFiles = pullI18nPackFiles;
 function prepareI18nPackFiles(externalExtensions, resultingTranslationPaths, pseudo = false) {
     let parsePromises = [];
     let mainPack = { version: i18nPackVersion, contents: {} };
     let extensionsPacks = {};
-    let errors = [];
     return event_stream_1.through(function (xlf) {
-        let project = path.basename(path.dirname(xlf.relative));
-        let resource = path.basename(xlf.relative, '.xlf');
+        let project = path.dirname(xlf.path);
+        let resource = path.basename(xlf.path, '.xlf');
         let contents = xlf.contents.toString();
         let parsePromise = pseudo ? XLF.parsePseudo(contents) : XLF.parse(contents);
         parsePromises.push(parsePromise);
@@ -1071,20 +1055,15 @@ function prepareI18nPackFiles(externalExtensions, resultingTranslationPaths, pse
                     mainPack.contents[path.substr(firstSlash + 1)] = file.messages;
                 }
             });
-        }).catch(reason => {
-            errors.push(reason);
         });
     }, function () {
         Promise.all(parsePromises)
             .then(() => {
-            if (errors.length > 0) {
-                throw errors;
-            }
             const translatedMainFile = createI18nFile('./main', mainPack);
             resultingTranslationPaths.push({ id: 'vscode', resourceName: 'main.i18n.json' });
             this.queue(translatedMainFile);
             for (let extension in extensionsPacks) {
-                const translatedExtFile = createI18nFile(`extensions/${extension}`, extensionsPacks[extension]);
+                const translatedExtFile = createI18nFile(`./extensions/${extension}`, extensionsPacks[extension]);
                 this.queue(translatedExtFile);
                 const externalExtensionId = externalExtensions[extension];
                 if (externalExtensionId) {
@@ -1096,9 +1075,7 @@ function prepareI18nPackFiles(externalExtensions, resultingTranslationPaths, pse
             }
             this.queue(null);
         })
-            .catch((reason) => {
-            this.emit('error', reason);
-        });
+            .catch(reason => { throw new Error(reason); });
     });
 }
 exports.prepareI18nPackFiles = prepareI18nPackFiles;
@@ -1116,15 +1093,11 @@ function prepareIslFiles(language, innoSetupConfig) {
                 let translatedFile = createIslFile(file.originalFilePath, file.messages, language, innoSetupConfig);
                 stream.queue(translatedFile);
             });
-        }).catch(reason => {
-            this.emit('error', reason);
         });
     }, function () {
         Promise.all(parsePromises)
             .then(() => { this.queue(null); })
-            .catch(reason => {
-            this.emit('error', reason);
-        });
+            .catch(reason => { throw new Error(reason); });
     });
 }
 exports.prepareIslFiles = prepareIslFiles;
@@ -1141,7 +1114,12 @@ function createIslFile(originalFilePath, messages, language, innoSetup) {
         if (line.length > 0) {
             let firstChar = line.charAt(0);
             if (firstChar === '[' || firstChar === ';') {
-                content.push(line);
+                if (line === '; *** Inno Setup version 5.5.3+ English messages ***') {
+                    content.push(`; *** Inno Setup version 5.5.3+ ${innoSetup.defaultInfo.name} messages ***`);
+                }
+                else {
+                    content.push(line);
+                }
             }
             else {
                 let sections = line.split('=');
@@ -1170,10 +1148,9 @@ function createIslFile(originalFilePath, messages, language, innoSetup) {
     });
     const basename = path.basename(originalFilePath);
     const filePath = `${basename}.${language.id}.isl`;
-    const encoded = iconv.encode(Buffer.from(content.join('\r\n'), 'utf8').toString(), innoSetup.codePage);
     return new File({
         path: filePath,
-        contents: Buffer.from(encoded),
+        contents: iconv.encode(Buffer.from(content.join('\r\n'), 'utf8').toString(), innoSetup.codePage)
     });
 }
 function encodeEntities(value) {

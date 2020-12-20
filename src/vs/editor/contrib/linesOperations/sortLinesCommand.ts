@@ -4,32 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { EditOperation } from 'vs/editor/common/core/editOperation';
+import * as editorCommon from 'vs/editor/common/editorCommon';
 import { Range } from 'vs/editor/common/core/range';
 import { Selection } from 'vs/editor/common/core/selection';
-import { ICommand, IEditOperationBuilder, ICursorStateComputerData } from 'vs/editor/common/editorCommon';
-import { IIdentifiedSingleEditOperation, ITextModel } from 'vs/editor/common/model';
+import { ITextModel, IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
 
-export class SortLinesCommand implements ICommand {
+export class SortLinesCommand implements editorCommon.ICommand {
 
-	private static _COLLATOR: Intl.Collator | null = null;
-	public static getCollator(): Intl.Collator {
-		if (!SortLinesCommand._COLLATOR) {
-			SortLinesCommand._COLLATOR = new Intl.Collator();
-		}
-		return SortLinesCommand._COLLATOR;
-	}
-
-	private readonly selection: Selection;
-	private readonly descending: boolean;
-	private selectionId: string | null;
+	private selection: Selection;
+	private selectionId: string;
+	private descending: boolean;
 
 	constructor(selection: Selection, descending: boolean) {
 		this.selection = selection;
 		this.descending = descending;
-		this.selectionId = null;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
 		let op = sortLines(model, this.selection, this.descending);
 		if (op) {
 			builder.addEditOperation(op.range, op.text);
@@ -38,15 +29,11 @@ export class SortLinesCommand implements ICommand {
 		this.selectionId = builder.trackSelection(this.selection);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this.selectionId!);
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
+		return helper.getTrackedSelection(this.selectionId);
 	}
 
-	public static canRun(model: ITextModel | null, selection: Selection, descending: boolean): boolean {
-		if (model === null) {
-			return false;
-		}
-
+	public static canRun(model: ITextModel, selection: Selection, descending: boolean): boolean {
 		let data = getSortData(model, selection, descending);
 
 		if (!data) {
@@ -84,7 +71,9 @@ function getSortData(model: ITextModel, selection: Selection, descending: boolea
 	}
 
 	let sorted = linesToSort.slice(0);
-	sorted.sort(SortLinesCommand.getCollator().compare);
+	sorted.sort((a, b) => {
+		return a.toLowerCase().localeCompare(b.toLowerCase());
+	});
 
 	// If descending, reverse the order.
 	if (descending === true) {

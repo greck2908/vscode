@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { LineTokens } from 'vs/editor/common/core/lineTokens';
 import * as modes from 'vs/editor/common/modes';
+import { LineTokens } from 'vs/editor/common/core/lineTokens';
 
 export function createScopedLineTokens(context: LineTokens, offset: number): ScopedLineTokens {
 	let tokenCount = context.getCount();
@@ -60,11 +60,6 @@ export class ScopedLineTokens {
 	public getLineContent(): string {
 		const actualLineContent = this._actual.getLineContent();
 		return actualLineContent.substring(this.firstCharOffset, this._lastCharOffset);
-	}
-
-	public getActualLineContentBefore(offset: number): string {
-		const actualLineContent = this._actual.getLineContent();
-		return actualLineContent.substring(0, this.firstCharOffset + offset);
 	}
 
 	public getTokenCount(): number {

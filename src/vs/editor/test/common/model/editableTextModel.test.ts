@@ -5,15 +5,14 @@
 
 import * as assert from 'assert';
 import { Range } from 'vs/editor/common/core/range';
-import { EndOfLinePreference, EndOfLineSequence, IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
-import { MirrorTextModel } from 'vs/editor/common/model/mirrorTextModel';
+import { EndOfLineSequence, IIdentifiedSingleEditOperation, EndOfLinePreference } from 'vs/editor/common/model';
 import { TextModel } from 'vs/editor/common/model/textModel';
-import { IModelContentChangedEvent } from 'vs/editor/common/model/textModelEvents';
+import { MirrorTextModel } from 'vs/editor/common/model/mirrorTextModel';
 import { assertSyncedModels, testApplyEditsWithSyncedModels } from 'vs/editor/test/common/model/editableTextModelTestUtils';
-import { createTextModel } from 'vs/editor/test/common/editorTestUtils';
+import { IModelContentChangedEvent } from 'vs/editor/common/model/textModelEvents';
 
 function createEditableTextModelFromString(text: string): TextModel {
-	return createTextModel(text, TextModel.DEFAULT_CREATION_OPTIONS, null);
+	return new TextModel(text, TextModel.DEFAULT_CREATION_OPTIONS, null);
 }
 
 suite('EditorModel - EditableTextModel.applyEdits updates mightContainRTL', () => {
@@ -1045,7 +1044,7 @@ suite('EditorModel - EditableTextModel.applyEdits', () => {
 		let model = createEditableTextModelFromString('Hello\nWorld!');
 		assert.equal(model.getEOL(), '\n');
 
-		let mirrorModel2 = new MirrorTextModel(null!, model.getLinesContent(), model.getEOL(), model.getVersionId());
+		let mirrorModel2 = new MirrorTextModel(null, model.getLinesContent(), model.getEOL(), model.getVersionId());
 		let mirrorModel2PrevVersionId = model.getVersionId();
 
 		model.onDidChangeContent((e: IModelContentChangedEvent) => {
@@ -1104,7 +1103,7 @@ suite('EditorModel - EditableTextModel.applyEdits', () => {
 			{ range: new Range(3, 1, 3, 6), text: null, },
 			{ range: new Range(2, 1, 3, 1), text: null, },
 			{ range: new Range(3, 6, 3, 6), text: '\nline2' }
-		], true);
+		]);
 
 		model.applyEdits(undoEdits);
 

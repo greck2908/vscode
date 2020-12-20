@@ -52,7 +52,7 @@ export function endsWith(haystack: string, needle: string): boolean {
 }
 
 export function repeat(value: string, count: number) {
-	let s = '';
+	var s = '';
 	while (count > 0) {
 		if ((count & 1) === 1) {
 			s += value;

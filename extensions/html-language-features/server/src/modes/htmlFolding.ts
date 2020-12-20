@@ -3,24 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TextDocument, FoldingRange, Position, Range, LanguageModes, LanguageMode } from './languageModes';
-import { CancellationToken } from 'vscode-languageserver';
+import { TextDocument, CancellationToken, Position, Range } from 'vscode-languageserver';
+import { FoldingRange } from 'vscode-languageserver-types';
+import { LanguageModes, LanguageMode } from './languageModes';
 
-export async function getFoldingRanges(languageModes: LanguageModes, document: TextDocument, maxRanges: number | undefined, _cancellationToken: CancellationToken | null): Promise<FoldingRange[]> {
+export function getFoldingRanges(languageModes: LanguageModes, document: TextDocument, maxRanges: number | undefined, _cancellationToken: CancellationToken | null): FoldingRange[] {
 	let htmlMode = languageModes.getMode('html');
 	let range = Range.create(Position.create(0, 0), Position.create(document.lineCount, 0));
 	let result: FoldingRange[] = [];
 	if (htmlMode && htmlMode.getFoldingRanges) {
-		result.push(... await htmlMode.getFoldingRanges(document));
+		result.push(...htmlMode.getFoldingRanges(document));
 	}
 
 	// cache folding ranges per mode
 	let rangesPerMode: { [mode: string]: FoldingRange[] } = Object.create(null);
-	let getRangesForMode = async (mode: LanguageMode) => {
+	let getRangesForMode = (mode: LanguageMode) => {
 		if (mode.getFoldingRanges) {
 			let ranges = rangesPerMode[mode.getId()];
 			if (!Array.isArray(ranges)) {
-				ranges = await mode.getFoldingRanges(document) || [];
+				ranges = mode.getFoldingRanges(document) || [];
 				rangesPerMode[mode.getId()] = ranges;
 			}
 			return ranges;
@@ -32,7 +33,7 @@ export async function getFoldingRanges(languageModes: LanguageModes, document: T
 	for (let modeRange of modeRanges) {
 		let mode = modeRange.mode;
 		if (mode && mode !== htmlMode && !modeRange.attributeValue) {
-			const ranges = await getRangesForMode(mode);
+			const ranges = getRangesForMode(mode);
 			result.push(...ranges.filter(r => r.startLine >= modeRange.start.line && r.endLine < modeRange.end.line));
 		}
 	}
@@ -53,7 +54,7 @@ function limitRanges(ranges: FoldingRange[], maxRanges: number) {
 
 	// compute each range's nesting level in 'nestingLevels'.
 	// count the number of ranges for each level in 'nestingLevelCounts'
-	let top: FoldingRange | undefined = undefined;
+	let top: FoldingRange | undefined = void 0;
 	let previous: FoldingRange[] = [];
 	let nestingLevels: number[] = [];
 	let nestingLevelCounts: number[] = [];

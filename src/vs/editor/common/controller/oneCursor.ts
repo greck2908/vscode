@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CursorContext, CursorState, SingleCursorState } from 'vs/editor/common/controller/cursorCommon';
+import { SingleCursorState, CursorContext, CursorState } from 'vs/editor/common/controller/cursorCommon';
 import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
 import { Selection, SelectionDirection } from 'vs/editor/common/core/selection';
@@ -11,8 +11,8 @@ import { TrackedRangeStickiness } from 'vs/editor/common/model';
 
 export class OneCursor {
 
-	public modelState!: SingleCursorState;
-	public viewState!: SingleCursorState;
+	public modelState: SingleCursorState;
+	public viewState: SingleCursorState;
 
 	private _selTrackedRange: string | null;
 	private _trackSelection: boolean;
@@ -81,11 +81,11 @@ export class OneCursor {
 			}
 			// We only have the view state => compute the model state
 			const selectionStart = context.model.validateRange(
-				context.coordinatesConverter.convertViewRangeToModelRange(viewState.selectionStart)
+				context.convertViewRangeToModelRange(viewState.selectionStart)
 			);
 
 			const position = context.model.validatePosition(
-				context.coordinatesConverter.convertViewPositionToModelPosition(viewState.position)
+				context.convertViewPositionToModelPosition(viewState.position.lineNumber, viewState.position.column)
 			);
 
 			modelState = new SingleCursorState(selectionStart, viewState.selectionStartLeftoverVisibleColumns, position, viewState.leftoverVisibleColumns);
@@ -104,15 +104,15 @@ export class OneCursor {
 
 		if (!viewState) {
 			// We only have the model state => compute the view state
-			const viewSelectionStart1 = context.coordinatesConverter.convertModelPositionToViewPosition(new Position(modelState.selectionStart.startLineNumber, modelState.selectionStart.startColumn));
-			const viewSelectionStart2 = context.coordinatesConverter.convertModelPositionToViewPosition(new Position(modelState.selectionStart.endLineNumber, modelState.selectionStart.endColumn));
+			const viewSelectionStart1 = context.convertModelPositionToViewPosition(new Position(modelState.selectionStart.startLineNumber, modelState.selectionStart.startColumn));
+			const viewSelectionStart2 = context.convertModelPositionToViewPosition(new Position(modelState.selectionStart.endLineNumber, modelState.selectionStart.endColumn));
 			const viewSelectionStart = new Range(viewSelectionStart1.lineNumber, viewSelectionStart1.column, viewSelectionStart2.lineNumber, viewSelectionStart2.column);
-			const viewPosition = context.coordinatesConverter.convertModelPositionToViewPosition(modelState.position);
+			const viewPosition = context.convertModelPositionToViewPosition(modelState.position);
 			viewState = new SingleCursorState(viewSelectionStart, modelState.selectionStartLeftoverVisibleColumns, viewPosition, modelState.leftoverVisibleColumns);
 		} else {
 			// Validate new view state
-			const viewSelectionStart = context.coordinatesConverter.validateViewRange(viewState.selectionStart, modelState.selectionStart);
-			const viewPosition = context.coordinatesConverter.validateViewPosition(viewState.position, modelState.position);
+			const viewSelectionStart = context.validateViewRange(viewState.selectionStart, modelState.selectionStart);
+			const viewPosition = context.validateViewPosition(viewState.position, modelState.position);
 			viewState = new SingleCursorState(viewSelectionStart, modelState.selectionStartLeftoverVisibleColumns, viewPosition, modelState.leftoverVisibleColumns);
 		}
 

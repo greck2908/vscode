@@ -3,14 +3,57 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CharCode } from 'vs/base/common/charCode';
-import { KeyCode, KeyCodeUtils, Keybinding, ResolvedKeybinding, SimpleKeybinding } from 'vs/base/common/keyCodes';
 import { OperatingSystem } from 'vs/base/common/platform';
-import { IMMUTABLE_CODE_TO_KEY_CODE, IMMUTABLE_KEY_CODE_TO_CODE, ScanCode, ScanCodeBinding, ScanCodeUtils } from 'vs/base/common/scanCode';
+import { KeyCode, ResolvedKeybinding, KeyCodeUtils, SimpleKeybinding, Keybinding, KeybindingType, ResolvedKeybindingPart } from 'vs/base/common/keyCodes';
+import { ScanCode, ScanCodeUtils, IMMUTABLE_CODE_TO_KEY_CODE, IMMUTABLE_KEY_CODE_TO_CODE, ScanCodeBinding } from 'vs/base/common/scanCode';
+import { CharCode } from 'vs/base/common/charCode';
+import { UILabelProvider, AriaLabelProvider, UserSettingsLabelProvider, ElectronAcceleratorLabelProvider } from 'vs/base/common/keybindingLabels';
+import { IKeyboardMapper } from 'vs/workbench/services/keybinding/common/keyboardMapper';
 import { IKeyboardEvent } from 'vs/platform/keybinding/common/keybinding';
-import { IKeyboardMapper } from 'vs/platform/keyboardLayout/common/keyboardMapper';
-import { BaseResolvedKeybinding } from 'vs/platform/keybinding/common/baseResolvedKeybinding';
-import { IMacLinuxKeyboardMapping, IMacLinuxKeyMapping } from 'vs/platform/keyboardLayout/common/keyboardLayout';
+
+export interface IMacLinuxKeyMapping {
+	value: string;
+	withShift: string;
+	withAltGr: string;
+	withShiftAltGr: string;
+}
+
+function macLinuxKeyMappingEquals(a: IMacLinuxKeyMapping, b: IMacLinuxKeyMapping): boolean {
+	if (!a && !b) {
+		return true;
+	}
+	if (!a || !b) {
+		return false;
+	}
+	return (
+		a.value === b.value
+		&& a.withShift === b.withShift
+		&& a.withAltGr === b.withAltGr
+		&& a.withShiftAltGr === b.withShiftAltGr
+	);
+}
+
+export interface IMacLinuxKeyboardMapping {
+	[scanCode: string]: IMacLinuxKeyMapping;
+}
+
+export function macLinuxKeyboardMappingEquals(a: IMacLinuxKeyboardMapping | null, b: IMacLinuxKeyboardMapping | null): boolean {
+	if (!a && !b) {
+		return true;
+	}
+	if (!a || !b) {
+		return false;
+	}
+	for (let scanCode = 0; scanCode < ScanCode.MAX_VALUE; scanCode++) {
+		const strScanCode = ScanCodeUtils.toString(scanCode);
+		const aEntry = a[strScanCode];
+		const bEntry = b[strScanCode];
+		if (!macLinuxKeyMappingEquals(aEntry, bEntry)) {
+			return false;
+		}
+	}
+	return true;
+}
 
 /**
  * A map from character to key codes.
@@ -20,32 +63,53 @@ import { IMacLinuxKeyboardMapping, IMacLinuxKeyMapping } from 'vs/platform/keybo
  */
 const CHAR_CODE_TO_KEY_CODE: ({ keyCode: KeyCode; shiftKey: boolean } | null)[] = [];
 
-export class NativeResolvedKeybinding extends BaseResolvedKeybinding<ScanCodeBinding> {
+export class NativeResolvedKeybinding extends ResolvedKeybinding {
 
 	private readonly _mapper: MacLinuxKeyboardMapper;
+	private readonly _OS: OperatingSystem;
+	private readonly _firstPart: ScanCodeBinding;
+	private readonly _chordPart: ScanCodeBinding | null;
 
-	constructor(mapper: MacLinuxKeyboardMapper, os: OperatingSystem, parts: ScanCodeBinding[]) {
-		super(os, parts);
+	constructor(mapper: MacLinuxKeyboardMapper, OS: OperatingSystem, firstPart: ScanCodeBinding, chordPart: ScanCodeBinding | null) {
+		super();
+		if (!firstPart) {
+			throw new Error(`Invalid USLayoutResolvedKeybinding`);
+		}
 		this._mapper = mapper;
+		this._OS = OS;
+		this._firstPart = firstPart;
+		this._chordPart = chordPart;
 	}
 
-	protected _getLabel(keybinding: ScanCodeBinding): string | null {
-		return this._mapper.getUILabelForScanCodeBinding(keybinding);
+	public getLabel(): string | null {
+		let firstPart = this._mapper.getUILabelForScanCodeBinding(this._firstPart);
+		let chordPart = this._mapper.getUILabelForScanCodeBinding(this._chordPart);
+		return UILabelProvider.toLabel(this._firstPart, firstPart, this._chordPart, chordPart, this._OS);
 	}
 
-	protected _getAriaLabel(keybinding: ScanCodeBinding): string | null {
-		return this._mapper.getAriaLabelForScanCodeBinding(keybinding);
+	public getAriaLabel(): string | null {
+		let firstPart = this._mapper.getAriaLabelForScanCodeBinding(this._firstPart);
+		let chordPart = this._mapper.getAriaLabelForScanCodeBinding(this._chordPart);
+		return AriaLabelProvider.toLabel(this._firstPart, firstPart, this._chordPart, chordPart, this._OS);
 	}
 
-	protected _getElectronAccelerator(keybinding: ScanCodeBinding): string | null {
-		return this._mapper.getElectronAcceleratorLabelForScanCodeBinding(keybinding);
+	public getElectronAccelerator(): string | null {
+		if (this._chordPart !== null) {
+			// Electron cannot handle chords
+			return null;
+		}
+
+		let firstPart = this._mapper.getElectronAcceleratorLabelForScanCodeBinding(this._firstPart);
+		return ElectronAcceleratorLabelProvider.toLabel(this._firstPart, firstPart, null, null, this._OS);
 	}
 
-	protected _getUserSettingsLabel(keybinding: ScanCodeBinding): string | null {
-		return this._mapper.getUserSettingsLabelForScanCodeBinding(keybinding);
+	public getUserSettingsLabel(): string | null {
+		let firstPart = this._mapper.getUserSettingsLabelForScanCodeBinding(this._firstPart);
+		let chordPart = this._mapper.getUserSettingsLabelForScanCodeBinding(this._chordPart);
+		return UserSettingsLabelProvider.toLabel(this._firstPart, firstPart, this._chordPart, chordPart, this._OS);
 	}
 
-	protected _isWYSIWYG(binding: ScanCodeBinding | null): boolean {
+	private _isWYSIWYG(binding: ScanCodeBinding | null): boolean {
 		if (!binding) {
 			return true;
 		}
@@ -64,8 +128,36 @@ export class NativeResolvedKeybinding extends BaseResolvedKeybinding<ScanCodeBin
 		return (a.toLowerCase() === b.toLowerCase());
 	}
 
-	protected _getDispatchPart(keybinding: ScanCodeBinding): string | null {
-		return this._mapper.getDispatchStrForScanCodeBinding(keybinding);
+	public isWYSIWYG(): boolean {
+		return (this._isWYSIWYG(this._firstPart) && this._isWYSIWYG(this._chordPart));
+	}
+
+	public isChord(): boolean {
+		return (this._chordPart ? true : false);
+	}
+
+	public getParts(): [ResolvedKeybindingPart, ResolvedKeybindingPart | null] {
+		return [
+			this._toResolvedKeybindingPart(this._firstPart),
+			this._chordPart ? this._toResolvedKeybindingPart(this._chordPart) : null
+		];
+	}
+
+	private _toResolvedKeybindingPart(binding: ScanCodeBinding): ResolvedKeybindingPart {
+		return new ResolvedKeybindingPart(
+			binding.ctrlKey,
+			binding.shiftKey,
+			binding.altKey,
+			binding.metaKey,
+			this._mapper.getUILabelForScanCodeBinding(binding),
+			this._mapper.getAriaLabelForScanCodeBinding(binding)
+		);
+	}
+
+	public getDispatchParts(): [string | null, string | null] {
+		let firstPart = this._firstPart ? this._mapper.getDispatchStrForScanCodeBinding(this._firstPart) : null;
+		let chordPart = this._chordPart ? this._mapper.getDispatchStrForScanCodeBinding(this._chordPart) : null;
+		return [firstPart, chordPart];
 	}
 }
 
@@ -353,11 +445,11 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 	/**
 	 * UI label for a ScanCode.
 	 */
-	private readonly _scanCodeToLabel: Array<string | null> = [];
+	private readonly _scanCodeToLabel: (string | null)[] = [];
 	/**
 	 * Dispatching string for a ScanCode.
 	 */
-	private readonly _scanCodeToDispatch: Array<string | null> = [];
+	private readonly _scanCodeToDispatch: (string | null)[] = [];
 
 	constructor(isUSStandard: boolean, rawMappings: IMacLinuxKeyboardMapping, OS: OperatingSystem) {
 		this._isUSStandard = isUSStandard;
@@ -416,7 +508,7 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 		}
 
 		// Try to identify keyboard layouts where characters A-Z are missing
-		// and forcibly map them to their corresponding scan codes if that is the case
+		// and forcefully map them to their corresponding scan codes if that is the case
 		const missingLatinLettersOverride: { [scanCode: string]: IMacLinuxKeyMapping; } = {};
 
 		{
@@ -682,7 +774,6 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 				const hwAltKey = (mod & 0b100) ? true : false;
 				const scanCodeCombo = new ScanCodeCombo(hwCtrlKey, hwShiftKey, hwAltKey, scanCode);
 				const resolvedKb = this.resolveKeyboardEvent({
-					_standardKeyboardEventBrand: true,
 					ctrlKey: scanCodeCombo.ctrlKey,
 					shiftKey: scanCodeCombo.shiftKey,
 					altKey: scanCodeCombo.altKey,
@@ -709,7 +800,7 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 					for (let i = 0, len = kbCombos.length; i < len; i++) {
 						const kbCombo = kbCombos[i];
 						// find out the priority of this scan code for this key code
-						let colPriority: string;
+						let colPriority = '-';
 
 						const scanCodeCombos = this._scanCodeKeyCodeMapper.lookupKeyCodeCombo(kbCombo);
 						if (scanCodeCombos.length === 1) {
@@ -913,12 +1004,6 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 			}
 		}
 
-		// See https://github.com/microsoft/vscode/issues/108880
-		if (this._OS === OperatingSystem.Macintosh && binding.ctrlKey && !binding.metaKey && !binding.altKey && constantKeyCode === KeyCode.US_MINUS) {
-			// ctrl+- and ctrl+shift+- render very similarly in native macOS menus, leading to confusion
-			return null;
-		}
-
 		if (constantKeyCode !== -1) {
 			return this._getElectronLabelForKeyCode(constantKeyCode);
 		}
@@ -927,33 +1012,31 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 	}
 
 	public resolveKeybinding(keybinding: Keybinding): NativeResolvedKeybinding[] {
-		let chordParts: ScanCodeBinding[][] = [];
-		for (let part of keybinding.parts) {
-			chordParts.push(this.simpleKeybindingToScanCodeBinding(part));
-		}
-		return this._toResolvedKeybinding(chordParts);
-	}
+		let result: NativeResolvedKeybinding[] = [], resultLen = 0;
 
-	private _toResolvedKeybinding(chordParts: ScanCodeBinding[][]): NativeResolvedKeybinding[] {
-		if (chordParts.length === 0) {
-			return [];
-		}
-		let result: NativeResolvedKeybinding[] = [];
-		this._generateResolvedKeybindings(chordParts, 0, [], result);
-		return result;
-	}
+		if (keybinding.type === KeybindingType.Chord) {
+			const firstParts = this.simpleKeybindingToScanCodeBinding(keybinding.firstPart);
+			const chordParts = this.simpleKeybindingToScanCodeBinding(keybinding.chordPart);
 
-	private _generateResolvedKeybindings(chordParts: ScanCodeBinding[][], currentIndex: number, previousParts: ScanCodeBinding[], result: NativeResolvedKeybinding[]) {
-		const chordPart = chordParts[currentIndex];
-		const isFinalIndex = currentIndex === chordParts.length - 1;
-		for (let i = 0, len = chordPart.length; i < len; i++) {
-			let chords = [...previousParts, chordPart[i]];
-			if (isFinalIndex) {
-				result.push(new NativeResolvedKeybinding(this, this._OS, chords));
-			} else {
-				this._generateResolvedKeybindings(chordParts, currentIndex + 1, chords, result);
+			for (let i = 0, len = firstParts.length; i < len; i++) {
+				const firstPart = firstParts[i];
+				for (let j = 0, lenJ = chordParts.length; j < lenJ; j++) {
+					const chordPart = chordParts[j];
+
+					result[resultLen++] = new NativeResolvedKeybinding(this, this._OS, firstPart, chordPart);
+				}
+			}
+		} else {
+			const firstParts = this.simpleKeybindingToScanCodeBinding(keybinding);
+
+			for (let i = 0, len = firstParts.length; i < len; i++) {
+				const firstPart = firstParts[i];
+
+				result[resultLen++] = new NativeResolvedKeybinding(this, this._OS, firstPart, null);
 			}
 		}
+
+		return result;
 	}
 
 	public resolveKeyboardEvent(keyboardEvent: IKeyboardEvent): NativeResolvedKeybinding {
@@ -979,7 +1062,7 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 			|| (keyCode === KeyCode.PageUp)
 		) {
 			// "Dispatch" on keyCode for these key codes to workaround issues with remote desktoping software
-			// where the scan codes appear to be incorrect (see https://github.com/microsoft/vscode/issues/24107)
+			// where the scan codes appear to be incorrect (see https://github.com/Microsoft/vscode/issues/24107)
 			const immutableScanCode = IMMUTABLE_KEY_CODE_TO_CODE[keyCode];
 			if (immutableScanCode !== -1) {
 				code = immutableScanCode;
@@ -1011,7 +1094,7 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 		}
 
 		const keypress = new ScanCodeBinding(keyboardEvent.ctrlKey, keyboardEvent.shiftKey, keyboardEvent.altKey, keyboardEvent.metaKey, code);
-		return new NativeResolvedKeybinding(this, this._OS, [keypress]);
+		return new NativeResolvedKeybinding(this, this._OS, keypress, null);
 	}
 
 	private _resolveSimpleUserBinding(binding: SimpleKeybinding | ScanCodeBinding | null): ScanCodeBinding[] {
@@ -1024,9 +1107,24 @@ export class MacLinuxKeyboardMapper implements IKeyboardMapper {
 		return this.simpleKeybindingToScanCodeBinding(binding);
 	}
 
-	public resolveUserBinding(input: (SimpleKeybinding | ScanCodeBinding)[]): ResolvedKeybinding[] {
-		const parts: ScanCodeBinding[][] = input.map(keybinding => this._resolveSimpleUserBinding(keybinding));
-		return this._toResolvedKeybinding(parts);
+	public resolveUserBinding(_firstPart: SimpleKeybinding | ScanCodeBinding | null, _chordPart: SimpleKeybinding | ScanCodeBinding | null): ResolvedKeybinding[] {
+		const firstParts = this._resolveSimpleUserBinding(_firstPart);
+		const chordParts = this._resolveSimpleUserBinding(_chordPart);
+
+		let result: NativeResolvedKeybinding[] = [], resultLen = 0;
+		for (let i = 0, len = firstParts.length; i < len; i++) {
+			const firstPart = firstParts[i];
+			if (_chordPart) {
+				for (let j = 0, lenJ = chordParts.length; j < lenJ; j++) {
+					const chordPart = chordParts[j];
+
+					result[resultLen++] = new NativeResolvedKeybinding(this, this._OS, firstPart, chordPart);
+				}
+			} else {
+				result[resultLen++] = new NativeResolvedKeybinding(this, this._OS, firstPart, null);
+			}
+		}
+		return result;
 	}
 
 	private static _charCodeToKb(charCode: number): { keyCode: KeyCode; shiftKey: boolean } | null {

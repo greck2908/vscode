@@ -2,12 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 import * as assert from 'assert';
-import { IEditorOptions } from 'vs/editor/common/config/editorOptions';
 import { Range } from 'vs/editor/common/core/range';
-import { InlineDecorationType } from 'vs/editor/common/viewModel/viewModel';
 import { testViewModel } from 'vs/editor/test/common/viewModel/testViewModel';
+import { IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import { InlineDecorationType } from 'vs/editor/common/viewModel/viewModel';
 
 suite('ViewModelDecorations', () => {
 	test('getDecorationsViewportData', () => {
@@ -77,7 +76,7 @@ suite('ViewModelDecorations', () => {
 				new Range(2, viewModel.getLineMinColumn(2), 3, viewModel.getLineMaxColumn(3))
 			).map((dec) => {
 				return dec.options.className;
-			}).filter(Boolean);
+			});
 
 			assert.deepEqual(actualDecorations, [
 				'dec1',
@@ -104,6 +103,16 @@ suite('ViewModelDecorations', () => {
 			// view line 2: (1,14 -> 1,24)
 			assert.deepEqual(inlineDecorations1, [
 				{
+					range: new Range(1, 2, 2, 1),
+					inlineClassName: 'i-dec2',
+					type: InlineDecorationType.Regular
+				},
+				{
+					range: new Range(2, 1, 2, 1),
+					inlineClassName: 'a-dec2',
+					type: InlineDecorationType.After
+				},
+				{
 					range: new Range(1, 2, 2, 2),
 					inlineClassName: 'i-dec3',
 					type: InlineDecorationType.Regular
@@ -114,7 +123,7 @@ suite('ViewModelDecorations', () => {
 					type: InlineDecorationType.After
 				},
 				{
-					range: new Range(1, 2, 3, 13),
+					range: new Range(1, 2, 4, 1),
 					inlineClassName: 'i-dec4',
 					type: InlineDecorationType.Regular
 				},
@@ -154,7 +163,7 @@ suite('ViewModelDecorations', () => {
 					type: InlineDecorationType.After
 				},
 				{
-					range: new Range(2, 1, 3, 13),
+					range: new Range(2, 1, 4, 1),
 					inlineClassName: 'i-dec8',
 					type: InlineDecorationType.Regular
 				},
@@ -189,7 +198,7 @@ suite('ViewModelDecorations', () => {
 					type: InlineDecorationType.After
 				},
 				{
-					range: new Range(2, 3, 3, 13),
+					range: new Range(2, 3, 4, 1),
 					inlineClassName: 'i-dec11',
 					type: InlineDecorationType.Regular
 				},
@@ -218,14 +227,9 @@ suite('ViewModelDecorations', () => {
 			// view line 3 (24 -> 36)
 			assert.deepEqual(inlineDecorations2, [
 				{
-					range: new Range(1, 2, 3, 13),
+					range: new Range(1, 2, 4, 1),
 					inlineClassName: 'i-dec4',
 					type: InlineDecorationType.Regular
-				},
-				{
-					range: new Range(3, 13, 3, 13),
-					inlineClassName: 'a-dec4',
-					type: InlineDecorationType.After
 				},
 				{
 					range: new Range(1, 2, 5, 8),
@@ -233,14 +237,9 @@ suite('ViewModelDecorations', () => {
 					type: InlineDecorationType.Regular
 				},
 				{
-					range: new Range(2, 1, 3, 13),
+					range: new Range(2, 1, 4, 1),
 					inlineClassName: 'i-dec8',
 					type: InlineDecorationType.Regular
-				},
-				{
-					range: new Range(3, 13, 3, 13),
-					inlineClassName: 'a-dec8',
-					type: InlineDecorationType.After
 				},
 				{
 					range: new Range(2, 1, 5, 8),
@@ -248,14 +247,9 @@ suite('ViewModelDecorations', () => {
 					type: InlineDecorationType.Regular
 				},
 				{
-					range: new Range(2, 3, 3, 13),
+					range: new Range(2, 3, 4, 1),
 					inlineClassName: 'i-dec11',
 					type: InlineDecorationType.Regular
-				},
-				{
-					range: new Range(3, 13, 3, 13),
-					inlineClassName: 'a-dec11',
-					type: InlineDecorationType.After
 				},
 				{
 					range: new Range(2, 3, 5, 8),
@@ -292,7 +286,7 @@ suite('ViewModelDecorations', () => {
 
 			let decorations = viewModel.getDecorationsInViewport(
 				new Range(2, viewModel.getLineMinColumn(2), 3, viewModel.getLineMaxColumn(3))
-			).filter(x => Boolean(x.options.beforeContentClassName));
+			);
 			assert.deepEqual(decorations, []);
 
 			let inlineDecorations1 = viewModel.getViewLineRenderingData(

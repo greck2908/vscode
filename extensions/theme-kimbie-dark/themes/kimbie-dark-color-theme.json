@@ -17,18 +17,16 @@
 		"inputOption.activeBorder": "#a57a4c",
 		"selection.background": "#84613daa",
 		"editor.selectionBackground": "#84613daa",
-		"minimap.selectionHighlight": "#84613daa",
 		"editorWidget.background": "#131510",
 		"editorHoverWidget.background": "#221a14",
 		"editorGroupHeader.tabsBackground": "#131510",
 		"editorLineNumber.activeForeground": "#adadad",
 		"tab.inactiveBackground": "#131510",
-		"tab.lastPinnedBorder": "#51412c",
+		"tab.modifiedBorder": "#cd9731",
 		"titleBar.activeBackground": "#423523",
 		"statusBar.background": "#423523",
 		"statusBar.debuggingBackground": "#423523",
 		"statusBar.noFolderBackground": "#423523",
-		"statusBarItem.remoteBackground": "#6e583b",
 		"activityBar.background": "#221a0f",
 		"activityBar.foreground": "#d3af86",
 		"sideBar.background": "#362712",
@@ -55,12 +53,14 @@
 	"tokenColors": [
 		{
 			"settings": {
+				"background": "#221a0f",
 				"foreground": "#d3af86"
 			}
 		},
 		{
 			"scope": ["meta.embedded", "source.groovy.embedded"],
 			"settings": {
+				"background": "#221a0f",
 				"foreground": "#d3af86"
 			}
 		},
@@ -113,11 +113,7 @@
 			"name": "Keywords",
 			"scope": [
 				"keyword",
-				"keyword.control",
-				"keyword.operator.new.cpp",
-				"keyword.operator.delete.cpp",
-				"keyword.other.using",
-				"keyword.other.operator"
+				"keyword.control"
 			],
 			"settings": {
 				"foreground": "#98676a"
@@ -146,9 +142,7 @@
 			"scope": [
 				"support.class",
 				"entity.name.class",
-				"entity.name.type",
-				"entity.name.namespace",
-				"entity.name.scope-resolution"
+				"entity.name.type"
 			],
 			"settings": {
 				"foreground": "#f06431"
@@ -261,7 +255,7 @@
 				"entity.name.section"
 			],
 			"settings": {
-				"fontStyle": "bold",
+				"fontStyle": "",
 				"foreground": "#8ab1b0"
 			}
 		},
@@ -333,6 +327,7 @@
 			"name": "Separator",
 			"scope": "meta.separator",
 			"settings": {
+				"background": "#84613d",
 				"foreground": "#d3af86"
 			}
 		},
@@ -390,11 +385,10 @@
 		},
 		{
 			"name": "Invalid",
-			"scope": "invalid",
+			"scope": "invalid.illegal",
 			"settings": {
 				"foreground": "#dc3958"
 			}
 		}
-	],
-	"semanticHighlighting": true
+	]
 }

@@ -5,32 +5,32 @@
 import 'mocha';
 import * as assert from 'assert';
 import * as embeddedSupport from '../modes/embeddedSupport';
+import { TextDocument } from 'vscode-languageserver-types';
 import { getLanguageService } from 'vscode-html-languageservice';
-import { TextDocument } from '../modes/languageModes';
 
 suite('HTML Embedded Support', () => {
 
-	const htmlLanguageService = getLanguageService();
+	var htmlLanguageService = getLanguageService();
 
 	function assertLanguageId(value: string, expectedLanguageId: string | undefined): void {
-		const offset = value.indexOf('|');
+		let offset = value.indexOf('|');
 		value = value.substr(0, offset) + value.substr(offset + 1);
 
-		const document = TextDocument.create('test://test/test.html', 'html', 0, value);
+		let document = TextDocument.create('test://test/test.html', 'html', 0, value);
 
-		const position = document.positionAt(offset);
+		let position = document.positionAt(offset);
 
-		const docRegions = embeddedSupport.getDocumentRegions(htmlLanguageService, document);
-		const languageId = docRegions.getLanguageAtPosition(position);
+		let docRegions = embeddedSupport.getDocumentRegions(htmlLanguageService, document);
+		let languageId = docRegions.getLanguageAtPosition(position);
 
 		assert.equal(languageId, expectedLanguageId);
 	}
 
 	function assertEmbeddedLanguageContent(value: string, languageId: string, expectedContent: string): void {
-		const document = TextDocument.create('test://test/test.html', 'html', 0, value);
+		let document = TextDocument.create('test://test/test.html', 'html', 0, value);
 
-		const docRegions = embeddedSupport.getDocumentRegions(htmlLanguageService, document);
-		const content = docRegions.getEmbeddedDocument(languageId);
+		let docRegions = embeddedSupport.getDocumentRegions(htmlLanguageService, document);
+		let content = docRegions.getEmbeddedDocument(languageId);
 		assert.equal(content.getText(), expectedContent);
 	}
 
@@ -89,7 +89,7 @@ suite('HTML Embedded Support', () => {
 		assertLanguageId('<script type="text/ecmascript">var| i = 0;</script>', 'javascript');
 		assertLanguageId('<script type="application/javascript">var| i = 0;</script>', 'javascript');
 		assertLanguageId('<script type="application/ecmascript">var| i = 0;</script>', 'javascript');
-		assertLanguageId('<script type="application/typescript">var| i = 0;</script>', undefined);
+		assertLanguageId('<script type="application/typescript">var| i = 0;</script>', void 0);
 		assertLanguageId('<script type=\'text/javascript\'>var| i = 0;</script>', 'javascript');
 	});
 

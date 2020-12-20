@@ -4,13 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as assert from 'assert';
-import * as path from 'vs/base/common/path';
+import * as path from 'path';
 import { getPathFromAmdModule } from 'vs/base/common/amd';
 import { CancellationTokenSource } from 'vs/base/common/cancellation';
 import * as glob from 'vs/base/common/glob';
 import { URI } from 'vs/base/common/uri';
-import { deserializeSearchError, IFolderQuery, ISearchRange, ITextQuery, ITextSearchContext, ITextSearchMatch, QueryType, SearchErrorCode, ISerializedFileMatch } from 'vs/workbench/services/search/common/search';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { IFolderQuery, ITextQuery, QueryType } from 'vs/platform/search/common/search';
+import { FileWalker } from 'vs/workbench/services/search/node/fileSearch';
+import { IRawSearch } from 'vs/workbench/services/search/node/legacy/search';
+import { Engine as TextSearchEngine } from 'vs/workbench/services/search/node/legacy/textSearch';
+import { TextSearchWorkerProvider } from 'vs/workbench/services/search/node/legacy/textSearchWorkerProvider';
+import { rawSearchQuery } from 'vs/workbench/services/search/node/rawSearchService';
+import { ISerializedFileMatch } from 'vs/workbench/services/search/node/search';
 import { TextSearchEngineAdapter } from 'vs/workbench/services/search/node/textSearchAdapter';
+
+function countAll(matches: ISerializedFileMatch[]): number {
+	return matches.reduce((acc, m) => acc + m.numMatches, 0);
+}
 
 const TEST_FIXTURES = path.normalize(getPathFromAmdModule(require, './fixtures'));
 const EXAMPLES_FIXTURES = path.join(TEST_FIXTURES, 'examples');
@@ -25,32 +36,63 @@ const MULTIROOT_QUERIES: IFolderQuery[] = [
 	{ folder: URI.file(MORE_FIXTURES) }
 ];
 
-function doSearchTest(query: ITextQuery, expectedResultCount: number | Function): Promise<ISerializedFileMatch[]> {
-	const engine = new TextSearchEngineAdapter(query);
+const textSearchWorkerProvider = new TextSearchWorkerProvider();
 
-	let c = 0;
-	const results: ISerializedFileMatch[] = [];
-	return engine.search(new CancellationTokenSource().token, _results => {
-		if (_results) {
-			c += _results.reduce((acc, cur) => acc + cur.numMatches!, 0);
-			results.push(..._results);
-		}
-	}, () => { }).then(() => {
-		if (typeof expectedResultCount === 'function') {
-			assert(expectedResultCount(c));
-		} else {
-			assert.equal(c, expectedResultCount, `rg ${c} !== ${expectedResultCount}`);
-		}
+function doLegacySearchTest(config: IRawSearch, expectedResultCount: number | Function): TPromise<void> {
+	return new TPromise<void>((resolve, reject) => {
+		let engine = new TextSearchEngine(config, new FileWalker({ ...config, useRipgrep: false }), textSearchWorkerProvider);
 
-		return results;
+		let c = 0;
+		engine.search((result) => {
+			if (result) {
+				c += countAll(result);
+			}
+		}, () => { }, (error) => {
+			try {
+				assert.ok(!error);
+				if (typeof expectedResultCount === 'function') {
+					assert(expectedResultCount(c));
+				} else {
+					assert.equal(c, expectedResultCount, 'legacy');
+				}
+			} catch (e) {
+				reject(e);
+			}
+
+			resolve(undefined);
+		});
 	});
 }
 
-suite('TextSearch-integration', function () {
+function doRipgrepSearchTest(query: ITextQuery, expectedResultCount: number | Function): TPromise<void> {
+	let engine = new TextSearchEngineAdapter(query);
+
+	let c = 0;
+	return engine.search(new CancellationTokenSource().token, (results) => {
+		if (results) {
+			c += results.reduce((acc, cur) => acc + cur.numMatches, 0);
+		}
+	}, () => { }).then(
+		() => {
+			if (typeof expectedResultCount === 'function') {
+				assert(expectedResultCount(c));
+			} else {
+				assert.equal(c, expectedResultCount, `rg ${c} !== ${expectedResultCount}`);
+			}
+		});
+}
+
+function doSearchTest(query: ITextQuery, expectedResultCount: number) {
+	const legacyQuery = rawSearchQuery(query);
+	return doLegacySearchTest(legacyQuery, expectedResultCount)
+		.then(() => doRipgrepSearchTest(query, expectedResultCount));
+}
+
+suite('Search-integration', function () {
 	this.timeout(1000 * 60); // increase timeout for this suite
 
 	test('Text: GameOfLife', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'GameOfLife' },
@@ -60,7 +102,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: GameOfLife (RegExp)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'Game.?fL\\w?fe', isRegExp: true }
@@ -69,28 +111,8 @@ suite('TextSearch-integration', function () {
 		return doSearchTest(config, 4);
 	});
 
-	test('Text: GameOfLife (unicode escape sequences)', () => {
-		const config: ITextQuery = {
-			type: QueryType.Text,
-			folderQueries: ROOT_FOLDER_QUERY,
-			contentPattern: { pattern: 'G\\u{0061}m\\u0065OfLife', isRegExp: true }
-		};
-
-		return doSearchTest(config, 4);
-	});
-
-	test('Text: GameOfLife (unicode escape sequences, force PCRE2)', () => {
-		const config: ITextQuery = {
-			type: QueryType.Text,
-			folderQueries: ROOT_FOLDER_QUERY,
-			contentPattern: { pattern: '(?<!a)G\\u{0061}m\\u0065OfLife', isRegExp: true }
-		};
-
-		return doSearchTest(config, 4);
-	});
-
 	test('Text: GameOfLife (PCRE2 RegExp)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			usePCRE2: true,
@@ -101,7 +123,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: GameOfLife (RegExp to EOL)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'GameOfLife.*', isRegExp: true }
@@ -111,7 +133,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: GameOfLife (Word Match, Case Sensitive)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'GameOfLife', isWordMatch: true, isCaseSensitive: true }
@@ -121,7 +143,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: GameOfLife (Word Match, Spaces)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: ' GameOfLife ', isWordMatch: true }
@@ -131,7 +153,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: GameOfLife (Word Match, Punctuation and Spaces)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: ', as =', isWordMatch: true }
@@ -141,7 +163,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: Helvetica (UTF 16)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'Helvetica' }
@@ -151,13 +173,13 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: e', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'e' }
 		};
 
-		return doSearchTest(config, 788);
+		return doSearchTest(config, 776);
 	});
 
 	test('Text: e (with excludes)', () => {
@@ -177,7 +199,7 @@ suite('TextSearch-integration', function () {
 			includePattern: { '**/examples/**': true }
 		};
 
-		return doSearchTest(config, 394);
+		return doSearchTest(config, 382);
 	});
 
 	// TODO
@@ -220,23 +242,26 @@ suite('TextSearch-integration', function () {
 			excludePattern: { '**/examples/small.js': true }
 		};
 
-		return doSearchTest(config, 371);
+		return doSearchTest(config, 361);
 	});
 
 	test('Text: a (capped)', () => {
 		const maxResults = 520;
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'a' },
 			maxResults
 		};
 
-		return doSearchTest(config, maxResults);
+		// (Legacy) search can go over the maxResults because it doesn't trim the results from its worker processes to the exact max size.
+		// But the worst-case scenario should be 2*max-1
+		return doLegacySearchTest(rawSearchQuery(config), count => count < maxResults * 2)
+			.then(() => doRipgrepSearchTest(config, maxResults));
 	});
 
 	test('Text: a (no results)', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: 'ahsogehtdas' }
@@ -246,7 +271,7 @@ suite('TextSearch-integration', function () {
 	});
 
 	test('Text: -size', () => {
-		const config: ITextQuery = {
+		const config = <ITextQuery>{
 			type: QueryType.Text,
 			folderQueries: ROOT_FOLDER_QUERY,
 			contentPattern: { pattern: '-size' }
@@ -273,7 +298,7 @@ suite('TextSearch-integration', function () {
 			excludePattern: makeExpression('**/*.txt')
 		};
 
-		return doSearchTest(config, 394);
+		return doSearchTest(config, 382);
 	});
 
 	test('Multiroot: e with global excludes', () => {
@@ -297,66 +322,12 @@ suite('TextSearch-integration', function () {
 			contentPattern: { pattern: 'e' }
 		};
 
-		return doSearchTest(config, 298);
-	});
-
-	test('Text: 语', () => {
-		const config: ITextQuery = {
-			type: QueryType.Text,
-			folderQueries: ROOT_FOLDER_QUERY,
-			contentPattern: { pattern: '语' }
-		};
-
-		return doSearchTest(config, 1).then(results => {
-			const matchRange = (<ITextSearchMatch>results[0].results![0]).ranges;
-			assert.deepEqual(matchRange, [{
-				startLineNumber: 0,
-				startColumn: 1,
-				endLineNumber: 0,
-				endColumn: 2
-			}]);
-		});
-	});
-
-	test('Multiple matches on line: h\\d,', () => {
-		const config: ITextQuery = {
-			type: QueryType.Text,
-			folderQueries: ROOT_FOLDER_QUERY,
-			contentPattern: { pattern: 'h\\d,', isRegExp: true }
-		};
-
-		return doSearchTest(config, 15).then(results => {
-			assert.equal(results.length, 3);
-			assert.equal(results[0].results!.length, 1);
-			const match = <ITextSearchMatch>results[0].results![0];
-			assert.equal((<ISearchRange[]>match.ranges).length, 5);
-		});
-	});
-
-	test('Search with context matches', () => {
-		const config: ITextQuery = {
-			type: QueryType.Text,
-			folderQueries: ROOT_FOLDER_QUERY,
-			contentPattern: { pattern: 'compiler.typeCheck();' },
-			beforeContext: 1,
-			afterContext: 2
-		};
-
-		return doSearchTest(config, 4).then(results => {
-			assert.equal(results.length, 4);
-			assert.equal((<ITextSearchContext>results[0].results![0]).lineNumber, 25);
-			assert.equal((<ITextSearchContext>results[0].results![0]).text, '        compiler.addUnit(prog,"input.ts");');
-			// assert.equal((<ITextSearchMatch>results[1].results[0]).preview.text, '        compiler.typeCheck();\n'); // See https://github.com/BurntSushi/ripgrep/issues/1095
-			assert.equal((<ITextSearchContext>results[2].results![0]).lineNumber, 27);
-			assert.equal((<ITextSearchContext>results[2].results![0]).text, '        compiler.emit();');
-			assert.equal((<ITextSearchContext>results[3].results![0]).lineNumber, 28);
-			assert.equal((<ITextSearchContext>results[3].results![0]).text, '');
-		});
+		return doSearchTest(config, 286);
 	});
 
 	suite('error messages', () => {
 		test('invalid encoding', () => {
-			const config: ITextQuery = {
+			const config = <ITextQuery>{
 				type: QueryType.Text,
 				folderQueries: [
 					{
@@ -367,66 +338,55 @@ suite('TextSearch-integration', function () {
 				contentPattern: { pattern: 'test' },
 			};
 
-			return doSearchTest(config, 0).then(() => {
+			return doRipgrepSearchTest(config, 0).then(() => {
 				throw new Error('expected fail');
 			}, err => {
-				const searchError = deserializeSearchError(err);
-				assert.equal(searchError.message, 'Unknown encoding: invalidEncoding');
-				assert.equal(searchError.code, SearchErrorCode.unknownEncoding);
+				assert.equal(err.message, 'Unknown encoding: invalidEncoding');
 			});
 		});
 
-		test('invalid regex case 1', () => {
-			const config: ITextQuery = {
+		test('invalid regex', () => {
+			const config = <ITextQuery>{
 				type: QueryType.Text,
 				folderQueries: ROOT_FOLDER_QUERY,
 				contentPattern: { pattern: ')', isRegExp: true },
 			};
 
-			return doSearchTest(config, 0).then(() => {
+			return doRipgrepSearchTest(config, 0).then(() => {
 				throw new Error('expected fail');
 			}, err => {
-				const searchError = deserializeSearchError(err);
-				const regexParseErrorForUnclosedParenthesis = 'Regex parse error: unmatched closing parenthesis';
-				assert.equal(searchError.message, regexParseErrorForUnclosedParenthesis);
-				assert.equal(searchError.code, SearchErrorCode.regexParseError);
+				assert.equal(err.message, 'Regex parse error');
 			});
 		});
-
-		test('invalid regex case 2', () => {
-			const config: ITextQuery = {
-				type: QueryType.Text,
-				folderQueries: ROOT_FOLDER_QUERY,
-				contentPattern: { pattern: '(?<!a.*)', isRegExp: true },
-			};
-
-			return doSearchTest(config, 0).then(() => {
-				throw new Error('expected fail');
-			}, err => {
-				const searchError = deserializeSearchError(err);
-				const regexParseErrorForLookAround = 'Regex parse error: lookbehind assertion is not fixed length';
-				assert.equal(searchError.message, regexParseErrorForLookAround);
-				assert.equal(searchError.code, SearchErrorCode.regexParseError);
-			});
-		});
-
 
 		test('invalid glob', () => {
-			const config: ITextQuery = {
+			const config = <ITextQuery>{
 				type: QueryType.Text,
 				folderQueries: ROOT_FOLDER_QUERY,
 				contentPattern: { pattern: 'foo' },
 				includePattern: {
-					'{{}': true
+					'***': true
 				}
 			};
 
-			return doSearchTest(config, 0).then(() => {
+			return doRipgrepSearchTest(config, 0).then(() => {
 				throw new Error('expected fail');
 			}, err => {
-				const searchError = deserializeSearchError(err);
-				assert.equal(searchError.message, 'Error parsing glob \'/{{}\': nested alternate groups are not allowed');
-				assert.equal(searchError.code, SearchErrorCode.globParseError);
+				assert.equal(err.message, 'Error parsing glob \'***\': invalid use of **; must be one path component');
+			});
+		});
+
+		test('invalid literal', () => {
+			const config = <ITextQuery>{
+				type: QueryType.Text,
+				folderQueries: ROOT_FOLDER_QUERY,
+				contentPattern: { pattern: 'foo\nbar', isRegExp: true }
+			};
+
+			return doRipgrepSearchTest(config, 0).then(() => {
+				throw new Error('expected fail');
+			}, err => {
+				assert.equal(err.message, 'The literal \'"\\n"\' is not allowed in a regex');
 			});
 		});
 	});

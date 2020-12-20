@@ -4,20 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 export interface PreviewSettings {
-	readonly source: string;
-	readonly line?: number;
-	readonly fragment?: string
-	readonly lineCount: number;
-	readonly scrollPreviewWithEditor?: boolean;
-	readonly scrollEditorWithPreview: boolean;
-	readonly disableSecurityWarnings: boolean;
-	readonly doubleClickToSwitchToEditor: boolean;
-	readonly webviewResourceRoot: string;
+	source: string;
+	line: number;
+	lineCount: number;
+	scrollPreviewWithEditor?: boolean;
+	scrollEditorWithPreview: boolean;
+	disableSecurityWarnings: boolean;
+	doubleClickToSwitchToEditor: boolean;
 }
 
 let cachedSettings: PreviewSettings | undefined = undefined;
 
-export function getData<T = {}>(key: string): T {
+export function getData(key: string): PreviewSettings {
 	const element = document.getElementById('vscode-markdown-preview-data');
 	if (element) {
 		const data = element.getAttribute(key);

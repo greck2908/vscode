@@ -2,27 +2,19 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 import * as assert from 'assert';
-import { CharCode } from 'vs/base/common/charCode';
-import * as platform from 'vs/base/common/platform';
+import { TestConfigurationService } from 'vs/platform/configuration/test/common/testConfigurationService';
+import { ModelServiceImpl } from 'vs/editor/common/services/modelServiceImpl';
 import { URI } from 'vs/base/common/uri';
+import * as platform from 'vs/base/common/platform';
+import { DefaultEndOfLine } from 'vs/editor/common/model';
+import { TextModel, createTextBuffer } from 'vs/editor/common/model/textModel';
 import { EditOperation } from 'vs/editor/common/core/editOperation';
 import { Range } from 'vs/editor/common/core/range';
-import { Selection } from 'vs/editor/common/core/selection';
+import { CharCode } from 'vs/base/common/charCode';
 import { createStringBuilder } from 'vs/editor/common/core/stringBuilder';
-import { DefaultEndOfLine } from 'vs/editor/common/model';
-import { createTextBuffer } from 'vs/editor/common/model/textModel';
-import { ModelServiceImpl } from 'vs/editor/common/services/modelServiceImpl';
-import { ITextResourcePropertiesService } from 'vs/editor/common/services/textResourceConfigurationService';
+import { ITextResourcePropertiesService } from 'vs/editor/common/services/resourceConfiguration';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { TestConfigurationService } from 'vs/platform/configuration/test/common/testConfigurationService';
-import { TestThemeService } from 'vs/platform/theme/test/common/testThemeService';
-import { NullLogService } from 'vs/platform/log/common/log';
-import { UndoRedoService } from 'vs/platform/undoRedo/common/undoRedoService';
-import { TestDialogService } from 'vs/platform/dialogs/test/common/testDialogService';
-import { TestNotificationService } from 'vs/platform/notification/test/common/testNotificationService';
-import { createTextModel } from 'vs/editor/test/common/editorTestUtils';
 
 const GENERATE_TESTS = false;
 
@@ -34,8 +26,7 @@ suite('ModelService', () => {
 		configService.setUserConfiguration('files', { 'eol': '\n' });
 		configService.setUserConfiguration('files', { 'eol': '\r\n' }, URI.file(platform.isWindows ? 'c:\\myroot' : '/myroot'));
 
-		const dialogService = new TestDialogService();
-		modelService = new ModelServiceImpl(configService, new TestTextResourcePropertiesService(configService), new TestThemeService(), new NullLogService(), new UndoRedoService(dialogService, new TestNotificationService()));
+		modelService = new ModelServiceImpl(null, configService, new TestTextResourcePropertiesService(configService));
 	});
 
 	teardown(() => {
@@ -43,7 +34,7 @@ suite('ModelService', () => {
 	});
 
 	test('EOL setting respected depending on root', () => {
-		const model1 = modelService.createModel('farboo', null);
+		const model1 = modelService.createModel('farboo', null, null);
 		const model2 = modelService.createModel('farboo', null, URI.file(platform.isWindows ? 'c:\\myroot\\myfile.txt' : '/myroot/myfile.txt'));
 		const model3 = modelService.createModel('farboo', null, URI.file(platform.isWindows ? 'c:\\other\\myfile.txt' : '/other/myfile.txt'));
 
@@ -54,7 +45,7 @@ suite('ModelService', () => {
 
 	test('_computeEdits no change', function () {
 
-		const model = createTextModel(
+		const model = TextModel.createFromString(
 			[
 				'This is line one', //16
 				'and this is line number two', //27
@@ -80,7 +71,7 @@ suite('ModelService', () => {
 
 	test('_computeEdits first line changed', function () {
 
-		const model = createTextModel(
+		const model = TextModel.createFromString(
 			[
 				'This is line one', //16
 				'and this is line number two', //27
@@ -108,7 +99,7 @@ suite('ModelService', () => {
 
 	test('_computeEdits EOL changed', function () {
 
-		const model = createTextModel(
+		const model = TextModel.createFromString(
 			[
 				'This is line one', //16
 				'and this is line number two', //27
@@ -134,7 +125,7 @@ suite('ModelService', () => {
 
 	test('_computeEdits EOL and other change 1', function () {
 
-		const model = createTextModel(
+		const model = TextModel.createFromString(
 			[
 				'This is line one', //16
 				'and this is line number two', //27
@@ -170,7 +161,7 @@ suite('ModelService', () => {
 
 	test('_computeEdits EOL and other change 2', function () {
 
-		const model = createTextModel(
+		const model = TextModel.createFromString(
 			[
 				'package main',	// 1
 				'func foo() {',	// 2
@@ -309,77 +300,10 @@ suite('ModelService', () => {
 		];
 		assertComputeEdits(file1, file2);
 	});
-
-	test('maintains undo for same resource and same content', () => {
-		const resource = URI.parse('file://test.txt');
-
-		// create a model
-		const model1 = modelService.createModel('text', null, resource);
-		// make an edit
-		model1.pushEditOperations(null, [{ range: new Range(1, 5, 1, 5), text: '1' }], () => [new Selection(1, 5, 1, 5)]);
-		assert.equal(model1.getValue(), 'text1');
-		// dispose it
-		modelService.destroyModel(resource);
-
-		// create a new model with the same content
-		const model2 = modelService.createModel('text1', null, resource);
-		// undo
-		model2.undo();
-		assert.equal(model2.getValue(), 'text');
-	});
-
-	test('maintains version id and alternative version id for same resource and same content', () => {
-		const resource = URI.parse('file://test.txt');
-
-		// create a model
-		const model1 = modelService.createModel('text', null, resource);
-		// make an edit
-		model1.pushEditOperations(null, [{ range: new Range(1, 5, 1, 5), text: '1' }], () => [new Selection(1, 5, 1, 5)]);
-		assert.equal(model1.getValue(), 'text1');
-		const versionId = model1.getVersionId();
-		const alternativeVersionId = model1.getAlternativeVersionId();
-		// dispose it
-		modelService.destroyModel(resource);
-
-		// create a new model with the same content
-		const model2 = modelService.createModel('text1', null, resource);
-		assert.equal(model2.getVersionId(), versionId);
-		assert.equal(model2.getAlternativeVersionId(), alternativeVersionId);
-	});
-
-	test('does not maintain undo for same resource and different content', () => {
-		const resource = URI.parse('file://test.txt');
-
-		// create a model
-		const model1 = modelService.createModel('text', null, resource);
-		// make an edit
-		model1.pushEditOperations(null, [{ range: new Range(1, 5, 1, 5), text: '1' }], () => [new Selection(1, 5, 1, 5)]);
-		assert.equal(model1.getValue(), 'text1');
-		// dispose it
-		modelService.destroyModel(resource);
-
-		// create a new model with the same content
-		const model2 = modelService.createModel('text2', null, resource);
-		// undo
-		model2.undo();
-		assert.equal(model2.getValue(), 'text2');
-	});
-
-	test('setValue should clear undo stack', () => {
-		const resource = URI.parse('file://test.txt');
-
-		const model = modelService.createModel('text', null, resource);
-		model.pushEditOperations(null, [{ range: new Range(1, 5, 1, 5), text: '1' }], () => [new Selection(1, 5, 1, 5)]);
-		assert.equal(model.getValue(), 'text1');
-
-		model.setValue('text2');
-		model.undo();
-		assert.equal(model.getValue(), 'text2');
-	});
 });
 
 function assertComputeEdits(lines1: string[], lines2: string[]): void {
-	const model = createTextModel(lines1.join('\n'));
+	const model = TextModel.createFromString(lines1.join('\n'));
 	const textBuffer = createTextBuffer(lines2.join('\n'), DefaultEndOfLine.LF);
 
 	// compute required edits
@@ -388,7 +312,7 @@ function assertComputeEdits(lines1: string[], lines2: string[]): void {
 	// console.log(`took ${Date.now() - start} ms.`);
 
 	// apply edits
-	model.pushEditOperations([], edits, null);
+	model.pushEditOperations(null, edits, null);
 
 	assert.equal(model.getValue(), lines2.join('\n'));
 }
@@ -440,19 +364,21 @@ assertComputeEdits(file1, file2);
 	}
 }
 
-export class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
+class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
 
-	declare readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	constructor(
-		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IConfigurationService private configurationService: IConfigurationService,
 	) {
 	}
 
 	getEOL(resource: URI, language?: string): string {
-		const eol = this.configurationService.getValue<string>('files.eol', { overrideIdentifier: language, resource });
-		if (eol && eol !== 'auto') {
-			return eol;
+		const filesConfiguration = this.configurationService.getValue<{ eol: string }>('files', { overrideIdentifier: language, resource });
+		if (filesConfiguration && filesConfiguration.eol) {
+			if (filesConfiguration.eol !== 'auto') {
+				return filesConfiguration.eol;
+			}
 		}
 		return (platform.isLinux || platform.isMacintosh) ? '\n' : '\r\n';
 	}

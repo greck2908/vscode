@@ -5,37 +5,36 @@
 
 import * as strings from 'vs/base/common/strings';
 import { EditOperation } from 'vs/editor/common/core/editOperation';
-import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
+import { Position } from 'vs/editor/common/core/position';
+import * as editorCommon from 'vs/editor/common/editorCommon';
 import { Selection } from 'vs/editor/common/core/selection';
-import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from 'vs/editor/common/editorCommon';
-import { IIdentifiedSingleEditOperation, ITextModel } from 'vs/editor/common/model';
+import { ITextModel, IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
 
-export class TrimTrailingWhitespaceCommand implements ICommand {
+export class TrimTrailingWhitespaceCommand implements editorCommon.ICommand {
 
-	private readonly _selection: Selection;
-	private _selectionId: string | null;
-	private readonly _cursors: Position[];
+	private selection: Selection;
+	private selectionId: string;
+	private cursors: Position[];
 
 	constructor(selection: Selection, cursors: Position[]) {
-		this._selection = selection;
-		this._cursors = cursors;
-		this._selectionId = null;
+		this.selection = selection;
+		this.cursors = cursors;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
-		let ops = trimTrailingWhitespace(model, this._cursors);
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
+		let ops = trimTrailingWhitespace(model, this.cursors);
 		for (let i = 0, len = ops.length; i < len; i++) {
 			let op = ops[i];
 
 			builder.addEditOperation(op.range, op.text);
 		}
 
-		this._selectionId = builder.trackSelection(this._selection);
+		this.selectionId = builder.trackSelection(this.selection);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this._selectionId!);
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
+		return helper.getTrackedSelection(this.selectionId);
 	}
 }
 

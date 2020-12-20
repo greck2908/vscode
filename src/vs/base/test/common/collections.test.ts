@@ -6,6 +6,7 @@
 import * as assert from 'assert';
 import * as collections from 'vs/base/common/collections';
 
+
 suite('Collections', () => {
 
 	test('forEach', () => {
@@ -52,5 +53,10 @@ suite('Collections', () => {
 		// Group 2
 		assert.equal(grouped[group2].length, 1);
 		assert.equal(grouped[group2][0].value, value3);
+	});
+
+	test('remove', () => {
+		assert(collections.remove({ 'far': 1 }, 'far'));
+		assert(!collections.remove({ 'far': 1 }, 'boo'));
 	});
 });

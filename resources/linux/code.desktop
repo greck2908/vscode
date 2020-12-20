@@ -2,17 +2,17 @@
 Name=@@NAME_LONG@@
 Comment=Code Editing. Redefined.
 GenericName=Text Editor
-Exec=@@EXEC@@ --no-sandbox --unity-launch %F
+Exec=/usr/share/@@NAME@@/@@NAME@@ --unity-launch %F
 Icon=@@ICON@@
 Type=Application
-StartupNotify=false
+StartupNotify=true
 StartupWMClass=@@NAME_SHORT@@
 Categories=Utility;TextEditor;Development;IDE;
-MimeType=text/plain;inode/directory;application/x-@@NAME@@-workspace;
+MimeType=text/plain;inode/directory;
 Actions=new-empty-window;
 Keywords=vscode;
 
 [Desktop Action new-empty-window]
 Name=New Empty Window
-Exec=@@EXEC@@ --no-sandbox --new-window %F
+Exec=/usr/share/@@NAME@@/@@NAME@@ --new-window %F
 Icon=@@ICON@@

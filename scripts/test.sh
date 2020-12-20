@@ -1,13 +1,15 @@
-#!/usr/bin/env bash
-set -e
+#!/bin/bash
+
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
 	realpath() { [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"; }
 	ROOT=$(dirname $(dirname $(realpath "$0")))
+
+	# On Linux with Electron 2.0.x running out of a VM causes
+	# a freeze so we only enable this flag on macOS
+	export ELECTRON_ENABLE_LOGGING=1
 else
 	ROOT=$(dirname $(dirname $(readlink -f $0)))
-	# Electron 6 introduces a chrome-sandbox that requires root to run. This can fail. Disable sandbox via --no-sandbox.
-	LINUX_EXTRA_ARGS="--no-sandbox --disable-dev-shm-usage --use-gl=swiftshader"
 fi
 
 cd $ROOT
@@ -24,17 +26,15 @@ fi
 test -d node_modules || yarn
 
 # Get electron
-yarn electron
+node build/lib/electron.js || ./node_modules/.bin/gulp electron
 
 # Unit Tests
 if [[ "$OSTYPE" == "darwin"* ]]; then
 	cd $ROOT ; ulimit -n 4096 ; \
-		ELECTRON_ENABLE_LOGGING=1 \
 		"$CODE" \
-		test/unit/electron/index.js "$@"
+		test/electron/index.js "$@"
 else
 	cd $ROOT ; \
-		ELECTRON_ENABLE_LOGGING=1 \
 		"$CODE" \
-		test/unit/electron/index.js $LINUX_EXTRA_ARGS "$@"
+		test/electron/index.js "$@"
 fi

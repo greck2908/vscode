@@ -4,7 +4,6 @@
 	"description": "%description%",
 	"version": "1.0.0",
 	"publisher": "vscode",
-	"license": "MIT",
 	"engines": { "vscode": "*" },
 	"scripts": {
 		"update-grammar": "node ../../build/npm/update-grammar.js atom/language-coffee-script grammars/coffeescript.cson ./syntaxes/coffeescript.tmLanguage.json"
@@ -12,7 +11,7 @@
 	"contributes": {
 		"languages": [{
 			"id": "coffeescript",
-			"extensions": [ ".coffee", ".cson", ".iced" ],
+			"extensions": [ ".coffee", ".cson" ],
 			"aliases": [ "CoffeeScript", "coffeescript", "coffee" ],
 			"configuration": "./language-configuration.json"
 		}],
@@ -28,7 +27,7 @@
 		],
 		"snippets": [{
 			"language": "coffeescript",
-			"path": "./snippets/coffeescript.code-snippets"
+			"path": "./snippets/coffeescript.snippets.json"
 		}]
 	}
 }

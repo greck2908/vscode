@@ -3,24 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IRelativePattern, match as matchGlobPattern } from 'vs/base/common/glob';
-import { URI } from 'vs/base/common/uri'; // TODO@Alex
-import { normalize } from 'vs/base/common/path';
+import { URI } from 'vs/base/common/uri';
+import { match as matchGlobPattern, IRelativePattern } from 'vs/base/common/glob'; // TODO@Alex
 
 export interface LanguageFilter {
-	readonly language?: string;
-	readonly scheme?: string;
-	readonly pattern?: string | IRelativePattern;
+	language?: string;
+	scheme?: string;
+	pattern?: string | IRelativePattern;
 	/**
 	 * This provider is implemented in the UI thread.
 	 */
-	readonly hasAccessToAllModels?: boolean;
-	readonly exclusive?: boolean;
+	hasAccessToAllModels?: boolean;
+	exclusive?: boolean;
 }
 
-export type LanguageSelector = string | LanguageFilter | ReadonlyArray<string | LanguageFilter>;
+export type LanguageSelector = string | LanguageFilter | (string | LanguageFilter)[];
 
-export function score(selector: LanguageSelector | undefined, candidateUri: URI, candidateLanguage: string, candidateIsSynchronized: boolean): number {
+export function score(selector: LanguageSelector, candidateUri: URI, candidateLanguage: string, candidateIsSynchronized: boolean): number {
 
 	if (Array.isArray(selector)) {
 		// array -> take max individual value
@@ -84,19 +83,7 @@ export function score(selector: LanguageSelector | undefined, candidateUri: URI,
 		}
 
 		if (pattern) {
-			let normalizedPattern: string | IRelativePattern;
-			if (typeof pattern === 'string') {
-				normalizedPattern = pattern;
-			} else {
-				// Since this pattern has a `base` property, we need
-				// to normalize this path first before passing it on
-				// because we will compare it against `Uri.fsPath`
-				// which uses platform specific separators.
-				// Refs: https://github.com/microsoft/vscode/issues/99938
-				normalizedPattern = { ...pattern, base: normalize(pattern.base) };
-			}
-
-			if (normalizedPattern === candidateUri.fsPath || matchGlobPattern(normalizedPattern, candidateUri.fsPath)) {
+			if (pattern === candidateUri.fsPath || matchGlobPattern(pattern, candidateUri.fsPath)) {
 				ret = 10;
 			} else {
 				return 0;

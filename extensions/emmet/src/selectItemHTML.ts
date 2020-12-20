@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getDeepestNode, findNextWord, findPrevWord, getHtmlNode, isNumber } from './util';
+import { getDeepestNode, findNextWord, findPrevWord, getHtmlNode } from './util';
 import { HtmlNode } from 'EmmetNode';
+import { isNumber } from 'util';
 
 export function nextItemHTML(selectionStart: vscode.Position, selectionEnd: vscode.Position, editor: vscode.TextEditor, rootNode: HtmlNode): vscode.Selection | undefined {
 	let currentNode = getHtmlNode(editor.document, rootNode, selectionEnd, false);
@@ -118,7 +119,9 @@ function getNextAttribute(selectionStart: vscode.Position, selectionEnd: vscode.
 		return;
 	}
 
-	for (const attr of node.attributes) {
+	for (let i = 0; i < node.attributes.length; i++) {
+		let attr = node.attributes[i];
+
 		if (selectionEnd.isBefore(attr.start)) {
 			// select full attr
 			return new vscode.Selection(attr.start, attr.end);

@@ -24,7 +24,7 @@ export function tail2<T>(arr: T[]): [T[], T] {
 	return [arr.slice(0, arr.length - 1), arr[arr.length - 1]];
 }
 
-export function equals<T>(one: ReadonlyArray<T> | undefined, other: ReadonlyArray<T> | undefined, itemEquals: (a: T, b: T) => boolean = (a, b) => a === b): boolean {
+export function equals<T>(one: ReadonlyArray<T>, other: ReadonlyArray<T>, itemEquals: (a: T, b: T) => boolean = (a, b) => a === b): boolean {
 	if (one === other) {
 		return true;
 	}
@@ -46,13 +46,13 @@ export function equals<T>(one: ReadonlyArray<T> | undefined, other: ReadonlyArra
 	return true;
 }
 
-export function binarySearch<T>(array: ReadonlyArray<T>, key: T, comparator: (op1: T, op2: T) => number): number {
+export function binarySearch<T>(array: T[], key: T, comparator: (op1: T, op2: T) => number): number {
 	let low = 0,
 		high = array.length - 1;
 
 	while (low <= high) {
-		const mid = ((low + high) / 2) | 0;
-		const comp = comparator(array[mid], key);
+		let mid = ((low + high) / 2) | 0;
+		let comp = comparator(array[mid], key);
 		if (comp < 0) {
 			low = mid + 1;
 		} else if (comp > 0) {
@@ -69,13 +69,13 @@ export function binarySearch<T>(array: ReadonlyArray<T>, key: T, comparator: (op
  * are located before all elements where p(x) is true.
  * @returns the least x for which p(x) is true or array.length if no element fullfills the given function.
  */
-export function findFirstInSorted<T>(array: ReadonlyArray<T>, p: (x: T) => boolean): number {
+export function findFirstInSorted<T>(array: T[], p: (x: T) => boolean): number {
 	let low = 0, high = array.length;
 	if (high === 0) {
 		return 0; // no children
 	}
 	while (low < high) {
-		const mid = Math.floor((low + high) / 2);
+		let mid = Math.floor((low + high) / 2);
 		if (p(array[mid])) {
 			high = mid;
 		} else {
@@ -86,40 +86,6 @@ export function findFirstInSorted<T>(array: ReadonlyArray<T>, p: (x: T) => boole
 }
 
 type Compare<T> = (a: T, b: T) => number;
-
-
-export function quickSelect<T>(nth: number, data: T[], compare: Compare<T>): T {
-
-	nth = nth | 0;
-
-	if (nth >= data.length) {
-		throw new TypeError('invalid index');
-	}
-
-	let pivotValue = data[Math.floor(data.length * Math.random())];
-	let lower: T[] = [];
-	let higher: T[] = [];
-	let pivots: T[] = [];
-
-	for (let value of data) {
-		const val = compare(value, pivotValue);
-		if (val < 0) {
-			lower.push(value);
-		} else if (val > 0) {
-			higher.push(value);
-		} else {
-			pivots.push(value);
-		}
-	}
-
-	if (nth < lower.length) {
-		return quickSelect(nth, lower, compare);
-	} else if (nth < lower.length + pivots.length) {
-		return pivots[0];
-	} else {
-		return quickSelect(nth - (lower.length + pivots.length), higher, compare);
-	}
-}
 
 /**
  * Like `Array#sort` but always stable. Usually runs a little slower `than Array#sort`
@@ -156,7 +122,7 @@ function _sort<T>(a: T[], compare: Compare<T>, lo: number, hi: number, aux: T[])
 	if (hi <= lo) {
 		return;
 	}
-	const mid = lo + ((hi - lo) / 2) | 0;
+	let mid = lo + ((hi - lo) / 2) | 0;
 	_sort(a, compare, lo, mid, aux);
 	_sort(a, compare, mid + 1, hi, aux);
 	if (compare(a[mid], a[mid + 1]) <= 0) {
@@ -169,7 +135,7 @@ function _sort<T>(a: T[], compare: Compare<T>, lo: number, hi: number, aux: T[])
 }
 
 
-export function groupBy<T>(data: ReadonlyArray<T>, compare: (a: T, b: T) => number): T[][] {
+export function groupBy<T>(data: T[], compare: (a: T, b: T) => number): T[][] {
 	const result: T[][] = [];
 	let currentGroup: T[] | undefined = undefined;
 	for (const element of mergeSort(data.slice(0), compare)) {
@@ -190,7 +156,7 @@ interface IMutableSplice<T> extends ISplice<T> {
 /**
  * Diffs two *sorted* arrays and computes the splices which apply the diff.
  */
-export function sortedDiff<T>(before: ReadonlyArray<T>, after: ReadonlyArray<T>, compare: (a: T, b: T) => number): ISplice<T>[] {
+export function sortedDiff<T>(before: T[], after: T[], compare: (a: T, b: T) => number): ISplice<T>[] {
 	const result: IMutableSplice<T>[] = [];
 
 	function pushSplice(start: number, deleteCount: number, toInsert: T[]): void {
@@ -245,8 +211,11 @@ export function sortedDiff<T>(before: ReadonlyArray<T>, after: ReadonlyArray<T>,
 /**
  * Takes two *sorted* arrays and computes their delta (removed, added elements).
  * Finishes in `Math.min(before.length, after.length)` steps.
+ * @param before
+ * @param after
+ * @param compare
  */
-export function delta<T>(before: ReadonlyArray<T>, after: ReadonlyArray<T>, compare: (a: T, b: T) => number): { removed: T[], added: T[] } {
+export function delta<T>(before: T[], after: T[], compare: (a: T, b: T) => number): { removed: T[], added: T[] } {
 	const splices = sortedDiff(before, after, compare);
 	const removed: T[] = [];
 	const added: T[] = [];
@@ -269,7 +238,7 @@ export function delta<T>(before: ReadonlyArray<T>, after: ReadonlyArray<T>, comp
  * @param n The number of elements to return.
  * @return The first n elemnts from array when sorted with compare.
  */
-export function top<T>(array: ReadonlyArray<T>, compare: (a: T, b: T) => number, n: number): T[] {
+export function top<T>(array: T[], compare: (a: T, b: T) => number, n: number): T[] {
 	if (n === 0) {
 		return [];
 	}
@@ -315,7 +284,7 @@ export function topAsync<T>(array: T[], compare: (a: T, b: T) => number, n: numb
 	});
 }
 
-function topStep<T>(array: ReadonlyArray<T>, compare: (a: T, b: T) => number, result: T[], i: number, m: number): void {
+function topStep<T>(array: T[], compare: (a: T, b: T) => number, result: T[], i: number, m: number): void {
 	for (const n = result.length; i < m; i++) {
 		const element = array[i];
 		if (compare(element, result[n - 1]) < 0) {
@@ -327,16 +296,22 @@ function topStep<T>(array: ReadonlyArray<T>, compare: (a: T, b: T) => number, re
 }
 
 /**
- * @returns New array with all falsy values removed. The original array IS NOT modified.
+ * @returns a new array with all falsy values removed. The original array IS NOT modified.
  */
-export function coalesce<T>(array: ReadonlyArray<T | undefined | null>): T[] {
+export function coalesce<T>(array: (T | undefined | null)[]): T[] {
+	if (!array) {
+		return array;
+	}
 	return <T[]>array.filter(e => !!e);
 }
 
 /**
  * Remove all falsey values from `array`. The original array IS modified.
  */
-export function coalesceInPlace<T>(array: Array<T | undefined | null>): void {
+export function coalesceInPlace<T>(array: (T | undefined | null)[]): void {
+	if (!array) {
+		return;
+	}
 	let to = 0;
 	for (let i = 0; i < array.length; i++) {
 		if (!!array[i]) {
@@ -355,26 +330,18 @@ export function move(array: any[], from: number, to: number): void {
 }
 
 /**
- * @returns false if the provided object is an array and not empty.
+ * @returns {{false}} if the provided object is an array
+ * 	and not empty.
  */
 export function isFalsyOrEmpty(obj: any): boolean {
-	return !Array.isArray(obj) || obj.length === 0;
-}
-
-/**
- * @returns True if the provided object is an array and has at least one element.
- */
-export function isNonEmptyArray<T>(obj: T[] | undefined | null): obj is T[];
-export function isNonEmptyArray<T>(obj: readonly T[] | undefined | null): obj is readonly T[];
-export function isNonEmptyArray<T>(obj: T[] | readonly T[] | undefined | null): obj is T[] | readonly T[] {
-	return Array.isArray(obj) && obj.length > 0;
+	return !Array.isArray(obj) || (<Array<any>>obj).length === 0;
 }
 
 /**
  * Removes duplicates from the given array. The optional keyFn allows to specify
  * how elements are checked for equalness by returning a unique string for each.
  */
-export function distinct<T>(array: ReadonlyArray<T>, keyFn?: (t: T) => string): T[] {
+export function distinct<T>(array: T[], keyFn?: (t: T) => string): T[] {
 	if (!keyFn) {
 		return array.filter((element, position) => {
 			return array.indexOf(element) === position;
@@ -394,18 +361,6 @@ export function distinct<T>(array: ReadonlyArray<T>, keyFn?: (t: T) => string): 
 	});
 }
 
-export function distinctES6<T>(array: ReadonlyArray<T>): T[] {
-	const seen = new Set<T>();
-	return array.filter(element => {
-		if (seen.has(element)) {
-			return false;
-		}
-
-		seen.add(element);
-		return true;
-	});
-}
-
 export function uniqueFilter<T>(keyFn: (t: T) => string): (t: T) => boolean {
 	const seen: { [key: string]: boolean; } = Object.create(null);
 
@@ -421,8 +376,8 @@ export function uniqueFilter<T>(keyFn: (t: T) => string): (t: T) => boolean {
 	};
 }
 
-export function lastIndex<T>(array: ReadonlyArray<T>, fn: (item: T) => boolean): number {
-	for (let i = array.length - 1; i >= 0; i--) {
+export function firstIndex<T>(array: T[] | ReadonlyArray<T>, fn: (item: T) => boolean): number {
+	for (let i = 0; i < array.length; i++) {
 		const element = array[i];
 
 		if (fn(element)) {
@@ -433,13 +388,14 @@ export function lastIndex<T>(array: ReadonlyArray<T>, fn: (item: T) => boolean):
 	return -1;
 }
 
-export function firstOrDefault<T, NotFound = T>(array: ReadonlyArray<T>, notFoundValue: NotFound): T | NotFound;
-export function firstOrDefault<T>(array: ReadonlyArray<T>): T | undefined;
-export function firstOrDefault<T, NotFound = T>(array: ReadonlyArray<T>, notFoundValue?: NotFound): T | NotFound | undefined {
-	return array.length > 0 ? array[0] : notFoundValue;
+export function first<T>(array: T[] | ReadonlyArray<T>, fn: (item: T) => boolean, notFoundValue: T): T;
+export function first<T>(array: T[] | ReadonlyArray<T>, fn: (item: T) => boolean): T | null;
+export function first<T>(array: T[] | ReadonlyArray<T>, fn: (item: T) => boolean, notFoundValue: T | null = null): T | null {
+	const index = firstIndex(array, fn);
+	return index < 0 ? notFoundValue : array[index];
 }
 
-export function commonPrefixLength<T>(one: ReadonlyArray<T>, other: ReadonlyArray<T>, equals: (a: T, b: T) => boolean = (a, b) => a === b): number {
+export function commonPrefixLength<T>(one: T[], other: T[], equals: (a: T, b: T) => boolean = (a, b) => a === b): number {
 	let result = 0;
 
 	for (let i = 0, len = Math.min(one.length, other.length); i < len && equals(one[i], other[i]); i++) {
@@ -480,11 +436,20 @@ export function range(arg: number, to?: number): number[] {
 	return result;
 }
 
-export function index<T>(array: ReadonlyArray<T>, indexer: (t: T) => string): { [key: string]: T; };
-export function index<T, R>(array: ReadonlyArray<T>, indexer: (t: T) => string, mapper: (t: T) => R): { [key: string]: R; };
-export function index<T, R>(array: ReadonlyArray<T>, indexer: (t: T) => string, mapper?: (t: T) => R): { [key: string]: R; } {
+export function fill<T>(num: number, valueFn: () => T, arr: T[] = []): T[] {
+	for (let i = 0; i < num; i++) {
+		arr[i] = valueFn();
+	}
+
+	return arr;
+}
+
+export function index<T>(array: T[], indexer: (t: T) => string): { [key: string]: T; };
+export function index<T, R>(array: T[], indexer: (t: T) => string, merger?: (t: T, r: R) => R): { [key: string]: R; };
+export function index<T, R>(array: T[], indexer: (t: T) => string, merger: (t: T, r: R) => R = t => t as any): { [key: string]: R; } {
 	return array.reduce((r, t) => {
-		r[indexer(t)] = mapper ? mapper(t) : t;
+		const key = indexer(t);
+		r[key] = merger(t, r[key]);
 		return r;
 	}, Object.create(null));
 }
@@ -496,21 +461,12 @@ export function index<T, R>(array: ReadonlyArray<T>, indexer: (t: T) => string, 
 export function insert<T>(array: T[], element: T): () => void {
 	array.push(element);
 
-	return () => remove(array, element);
-}
-
-/**
- * Removes an element from an array if it can be found.
- */
-export function remove<T>(array: T[], element: T): T | undefined {
-	const index = array.indexOf(element);
-	if (index > -1) {
-		array.splice(index, 1);
-
-		return element;
-	}
-
-	return undefined;
+	return () => {
+		const index = array.indexOf(element);
+		if (index > -1) {
+			array.splice(index, 1);
+		}
+	};
 }
 
 /**
@@ -525,6 +481,7 @@ export function arrayInsert<T>(target: T[], insertIndex: number, insertArr: T[])
 
 /**
  * Uses Fisher-Yates shuffle to shuffle the given array
+ * @param array
  */
 export function shuffle<T>(array: T[], _seed?: number): void {
 	let rand: () => number;
@@ -534,7 +491,7 @@ export function shuffle<T>(array: T[], _seed?: number): void {
 		// Seeded random number generator in JS. Modified from:
 		// https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
 		rand = () => {
-			const x = Math.sin(seed++) * 179426549; // throw away most significant digits and reduce any potential bias
+			var x = Math.sin(seed++) * 179426549; // throw away most significant digits and reduce any potential bias
 			return x - Math.floor(x);
 		};
 	} else {
@@ -542,8 +499,8 @@ export function shuffle<T>(array: T[], _seed?: number): void {
 	}
 
 	for (let i = array.length - 1; i > 0; i -= 1) {
-		const j = Math.floor(rand() * (i + 1));
-		const temp = array[i];
+		let j = Math.floor(rand() * (i + 1));
+		let temp = array[i];
 		array[i] = array[j];
 		array[j] = temp;
 	}
@@ -573,30 +530,11 @@ export function pushToEnd<T>(arr: T[], value: T): void {
 	}
 }
 
-export function mapArrayOrNot<T, U>(items: T | T[], fn: (_: T) => U): U | U[] {
-	return Array.isArray(items) ?
-		items.map(fn) :
-		fn(items);
-}
-
-export function asArray<T>(x: T | T[]): T[];
-export function asArray<T>(x: T | readonly T[]): readonly T[];
-export function asArray<T>(x: T | T[]): T[] {
-	return Array.isArray(x) ? x : [x];
-}
-
-export function getRandomElement<T>(arr: T[]): T | undefined {
-	return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/**
- * Returns the first mapped value of the array which is not undefined.
- */
-export function mapFind<T, R>(array: Iterable<T>, mapFn: (value: T) => R | undefined): R | undefined {
-	for (const value of array) {
-		const mapped = mapFn(value);
-		if (mapped !== undefined) {
-			return mapped;
+export function find<T>(arr: ArrayLike<T>, predicate: (value: T, index: number, arr: ArrayLike<T>) => any): T | undefined {
+	for (let i = 0; i < arr.length; i++) {
+		const element = arr[i];
+		if (predicate(element, i, arr)) {
+			return element;
 		}
 	}
 

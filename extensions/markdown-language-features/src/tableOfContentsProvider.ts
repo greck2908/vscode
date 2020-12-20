@@ -15,17 +15,11 @@ export interface TocEntry {
 	readonly location: vscode.Location;
 }
 
-export interface SkinnyTextLine {
-	text: string;
-}
-
 export interface SkinnyTextDocument {
 	readonly uri: vscode.Uri;
-	readonly version: number;
 	readonly lineCount: number;
-
-	lineAt(line: number): SkinnyTextLine;
 	getText(): string;
+	lineAt(line: number): vscode.TextLine;
 }
 
 export class TableOfContentsProvider {
@@ -55,21 +49,21 @@ export class TableOfContentsProvider {
 
 	private async buildToc(document: SkinnyTextDocument): Promise<TocEntry[]> {
 		const toc: TocEntry[] = [];
-		const tokens = await this.engine.parse(document);
+		const tokens = await this.engine.parse(document.uri, document.getText());
 
-		const existingSlugEntries = new Map<string, { count: number }>();
+		const slugCount = new Map<string, number>();
 
 		for (const heading of tokens.filter(token => token.type === 'heading_open')) {
 			const lineNumber = heading.map[0];
 			const line = document.lineAt(lineNumber);
 
 			let slug = githubSlugifier.fromHeading(line.text);
-			const existingSlugEntry = existingSlugEntries.get(slug.value);
-			if (existingSlugEntry) {
-				++existingSlugEntry.count;
-				slug = githubSlugifier.fromHeading(slug.value + '-' + existingSlugEntry.count);
+			if (slugCount.has(slug.value)) {
+				const count = slugCount.get(slug.value)!;
+				slugCount.set(slug.value, count + 1);
+				slug = githubSlugifier.fromHeading(slug.value + '-' + (count + 1));
 			} else {
-				existingSlugEntries.set(slug.value, { count: 0 });
+				slugCount.set(slug.value, 0);
 			}
 
 			toc.push({
@@ -77,8 +71,7 @@ export class TableOfContentsProvider {
 				text: TableOfContentsProvider.getHeaderText(line.text),
 				level: TableOfContentsProvider.getHeaderLevel(heading.markup),
 				line: lineNumber,
-				location: new vscode.Location(document.uri,
-					new vscode.Range(lineNumber, 0, lineNumber, line.text.length))
+				location: new vscode.Location(document.uri, line.range)
 			});
 		}
 
@@ -91,13 +84,13 @@ export class TableOfContentsProvider {
 					break;
 				}
 			}
-			const endLine = end ?? document.lineCount - 1;
+			const endLine = typeof end === 'number' ? end : document.lineCount - 1;
 			return {
 				...entry,
 				location: new vscode.Location(document.uri,
 					new vscode.Range(
 						entry.location.range.start,
-						new vscode.Position(endLine, document.lineAt(endLine).text.length)))
+						new vscode.Position(endLine, document.lineAt(endLine).range.end.character)))
 			};
 		});
 	}

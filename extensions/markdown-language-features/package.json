@@ -5,14 +5,12 @@
 	"version": "1.0.0",
 	"icon": "icon.png",
 	"publisher": "vscode",
-	"enableProposedApi": true,
-	"license": "MIT",
 	"aiKey": "AIF-d9b70cd4-b9f9-4d70-929b-a071c400b217",
+	"enableProposedApi": true,
 	"engines": {
 		"vscode": "^1.20.0"
 	},
 	"main": "./out/extension",
-	"browser": "./dist/browser/extension",
 	"categories": [
 		"Programming Languages"
 	],
@@ -25,9 +23,7 @@
 		"onCommand:markdown.showLockedPreviewToSide",
 		"onCommand:markdown.showSource",
 		"onCommand:markdown.showPreviewSecuritySelector",
-		"onCommand:markdown.api.render",
-		"onWebviewPanel:markdown.preview",
-		"onCustomEditor:vscode.markdown.preview.editor"
+		"onWebviewPanel:markdown.preview"
 	],
 	"contributes": {
 		"commands": [
@@ -36,27 +32,36 @@
 				"title": "%markdown.preview.title%",
 				"category": "Markdown",
 				"icon": {
-					"light": "./media/preview-light.svg",
-					"dark": "./media/preview-dark.svg"
+					"light": "./media/Preview.svg",
+					"dark": "./media/Preview_inverse.svg"
 				}
 			},
 			{
 				"command": "markdown.showPreviewToSide",
 				"title": "%markdown.previewSide.title%",
 				"category": "Markdown",
-				"icon": "$(open-preview)"
+				"icon": {
+					"light": "./media/PreviewOnRightPane_16x.svg",
+					"dark": "./media/PreviewOnRightPane_16x_dark.svg"
+				}
 			},
 			{
 				"command": "markdown.showLockedPreviewToSide",
 				"title": "%markdown.showLockedPreviewToSide.title%",
 				"category": "Markdown",
-				"icon": "$(open-preview)"
+				"icon": {
+					"light": "./media/PreviewOnRightPane_16x.svg",
+					"dark": "./media/PreviewOnRightPane_16x_dark.svg"
+				}
 			},
 			{
 				"command": "markdown.showSource",
 				"title": "%markdown.showSource.title%",
 				"category": "Markdown",
-				"icon": "$(go-to-file)"
+				"icon": {
+					"light": "./media/ViewSource.svg",
+					"dark": "./media/ViewSource_inverse.svg"
+				}
 			},
 			{
 				"command": "markdown.showPreviewSecuritySelector",
@@ -78,7 +83,7 @@
 			"editor/title": [
 				{
 					"command": "markdown.showPreviewToSide",
-					"when": "editorLangId == markdown && !notebookEditorFocused",
+					"when": "editorLangId == markdown",
 					"alt": "markdown.showPreview",
 					"group": "navigation"
 				},
@@ -114,23 +119,23 @@
 				{
 					"command": "markdown.showPreview",
 					"when": "resourceLangId == markdown",
-					"group": "1_open"
+					"group": "navigation"
 				}
 			],
 			"commandPalette": [
 				{
 					"command": "markdown.showPreview",
-					"when": "editorLangId == markdown && !notebookEditorFocused",
+					"when": "editorLangId == markdown",
 					"group": "navigation"
 				},
 				{
 					"command": "markdown.showPreviewToSide",
-					"when": "editorLangId == markdown && !notebookEditorFocused",
+					"when": "editorLangId == markdown",
 					"group": "navigation"
 				},
 				{
 					"command": "markdown.showLockedPreviewToSide",
-					"when": "editorLangId == markdown && !notebookEditorFocused",
+					"when": "editorLangId == markdown",
 					"group": "navigation"
 				},
 				{
@@ -140,7 +145,7 @@
 				},
 				{
 					"command": "markdown.showPreviewSecuritySelector",
-					"when": "editorLangId == markdown && !notebookEditorFocused"
+					"when": "editorLangId == markdown"
 				},
 				{
 					"command": "markdown.showPreviewSecuritySelector",
@@ -148,14 +153,6 @@
 				},
 				{
 					"command": "markdown.preview.toggleLock",
-					"when": "markdownPreviewFocus"
-				},
-				{
-					"command": "markdown.preview.refresh",
-					"when": "editorLangId == markdown && !notebookEditorFocused"
-				},
-				{
-					"command": "markdown.preview.refresh",
 					"when": "markdownPreviewFocus"
 				}
 			]
@@ -165,13 +162,13 @@
 				"command": "markdown.showPreview",
 				"key": "shift+ctrl+v",
 				"mac": "shift+cmd+v",
-				"when": "editorLangId == markdown && !notebookEditorFocused"
+				"when": "editorLangId == markdown"
 			},
 			{
 				"command": "markdown.showPreviewToSide",
 				"key": "ctrl+k v",
 				"mac": "cmd+k v",
-				"when": "editorLangId == markdown && !notebookEditorFocused"
+				"when": "editorLangId == markdown"
 			}
 		],
 		"configuration": {
@@ -181,11 +178,18 @@
 			"properties": {
 				"markdown.styles": {
 					"type": "array",
-					"items": {
-						"type": "string"
-					},
 					"default": [],
 					"description": "%markdown.styles.dec%",
+					"scope": "resource"
+				},
+				"markdown.previewFrontMatter": {
+					"type": "string",
+					"enum": [
+						"hide",
+						"show"
+					],
+					"default": "hide",
+					"description": "%markdown.previewFrontMatter.dec%",
 					"scope": "resource"
 				},
 				"markdown.preview.breaks": {
@@ -202,7 +206,7 @@
 				},
 				"markdown.preview.fontFamily": {
 					"type": "string",
-					"default": "-apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif",
+					"default": "-apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'HelveticaNeue-Light', 'Ubuntu', 'Droid Sans', sans-serif",
 					"description": "%markdown.preview.fontFamily.desc%",
 					"scope": "resource"
 				},
@@ -223,6 +227,12 @@
 					"default": true,
 					"description": "%markdown.preview.scrollPreviewWithEditor.desc%",
 					"scope": "resource"
+				},
+				"markdown.preview.scrollPreviewWithEditorSelection": {
+					"type": "boolean",
+					"default": true,
+					"description": "%markdown.preview.scrollPreviewWithEditorSelection.desc%",
+					"deprecationMessage": "%markdown.preview.scrollPreviewWithEditorSelection.deprecationMessage%"
 				},
 				"markdown.preview.markEditorSelection": {
 					"type": "boolean",
@@ -256,20 +266,6 @@
 						"%configuration.markdown.preview.openMarkdownLinks.inEditor%"
 					]
 				},
-				"markdown.links.openLocation": {
-					"type": "string",
-					"default": "currentGroup",
-					"description": "%configuration.markdown.links.openLocation.description%",
-					"scope": "resource",
-					"enum": [
-						"currentGroup",
-						"beside"
-					],
-					"enumDescriptions": [
-						"%configuration.markdown.links.openLocation.currentGroup%",
-						"%configuration.markdown.links.openLocation.beside%"
-					]
-				},
 				"markdown.trace": {
 					"type": "string",
 					"enum": [
@@ -300,18 +296,6 @@
 		],
 		"markdown.previewScripts": [
 			"./media/index.js"
-		],
-		"customEditors": [
-			{
-				"viewType": "vscode.markdown.preview.editor",
-				"displayName": "Markdown Preview (Experimental)",
-				"priority": "option",
-				"selector": [
-					{
-						"filenamePattern": "*.md"
-					}
-				]
-			}
 		]
 	},
 	"scripts": {
@@ -319,22 +303,26 @@
 		"watch": "npm run build-preview && gulp watch-extension:markdown-language-features",
 		"vscode:prepublish": "npm run build-ext && npm run build-preview",
 		"build-ext": "node ../../node_modules/gulp/bin/gulp.js --gulpfile ../../build/gulpfile.extensions.js compile-extension:markdown-language-features ./tsconfig.json",
-		"build-preview": "webpack --mode production",
-		"compile-web": "npx webpack-cli --config extension-browser.webpack.config --mode none",
-		"watch-web": "npx webpack-cli --config extension-browser.webpack.config --mode none --watch --info-verbosity verbose"
+		"build-preview": "webpack --mode development"
 	},
 	"dependencies": {
-		"highlight.js": "^10.4.1",
-		"markdown-it": "^12.0.3",
-		"markdown-it-front-matter": "^0.2.1",
-		"vscode-extension-telemetry": "0.1.1",
+		"highlight.js": "9.12.0",
+		"markdown-it": "^8.4.1",
+		"vscode-extension-telemetry": "0.1.0",
 		"vscode-nls": "^4.0.0"
 	},
 	"devDependencies": {
-		"@types/highlight.js": "10.1.0",
+		"@types/highlight.js": "9.1.10",
 		"@types/lodash.throttle": "^4.1.3",
 		"@types/markdown-it": "0.0.2",
-		"@types/node": "^12.19.9",
-		"lodash.throttle": "^4.1.1"
+		"@types/node": "^8.10.25",
+		"lodash.throttle": "^4.1.1",
+		"mocha-junit-reporter": "^1.17.0",
+		"mocha-multi-reporters": "^1.1.7",
+		"ts-loader": "^4.0.1",
+		"typescript": "^2.7.2",
+		"vscode": "^1.1.10",
+		"webpack": "^4.1.0",
+		"webpack-cli": "^2.0.10"
 	}
 }

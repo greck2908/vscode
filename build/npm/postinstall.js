@@ -13,22 +13,11 @@ const yarn = process.platform === 'win32' ? 'yarn.cmd' : 'yarn';
  * @param {*} [opts]
  */
 function yarnInstall(location, opts) {
-	opts = opts || { env: process.env };
+	opts = opts || {};
 	opts.cwd = location;
 	opts.stdio = 'inherit';
 
-	const raw = process.env['npm_config_argv'] || '{}';
-	const argv = JSON.parse(raw);
-	const original = argv.original || [];
-	const args = original.filter(arg => arg === '--ignore-optional' || arg === '--frozen-lockfile');
-	if (opts.ignoreEngines) {
-		args.push('--ignore-engines');
-		delete opts.ignoreEngines;
-	}
-
-	console.log(`Installing dependencies in ${location}...`);
-	console.log(`$ yarn ${args.join(' ')}`);
-	const result = cp.spawnSync(yarn, args, opts);
+	const result = cp.spawnSync(yarn, ['install'], opts);
 
 	if (result.error || result.status !== 0) {
 		process.exit(1);
@@ -36,16 +25,6 @@ function yarnInstall(location, opts) {
 }
 
 yarnInstall('extensions'); // node modules shared by all extensions
-
-if (!(process.platform === 'win32' && (process.arch === 'arm64' || process.env['npm_config_arch'] === 'arm64'))) {
-	const env = { ...process.env };
-	if (process.env['VSCODE_REMOTE_CC']) { env['CC'] = process.env['VSCODE_REMOTE_CC']; }
-	if (process.env['VSCODE_REMOTE_CXX']) { env['CXX'] = process.env['VSCODE_REMOTE_CXX']; }
-	if (process.env['VSCODE_REMOTE_NODE_GYP']) { env['npm_config_node_gyp'] = process.env['VSCODE_REMOTE_NODE_GYP']; }
-
-	yarnInstall('remote', { env }); // node modules used by vscode server
-	yarnInstall('remote/web'); // node modules used by vscode web
-}
 
 const allExtensionFolders = fs.readdirSync('extensions');
 const extensions = allExtensionFolders.filter(e => {
@@ -57,11 +36,13 @@ const extensions = allExtensionFolders.filter(e => {
 	}
 });
 
-extensions.forEach(extension => yarnInstall(`extensions/${extension}`, { ignoreEngines: true }));
+extensions.forEach(extension => yarnInstall(`extensions/${extension}`));
 
 function yarnInstallBuildDependencies() {
 	// make sure we install the deps of build/lib/watch for the system installed
 	// node, since that is the driver of gulp
+	//@ts-ignore
+	const env = Object.assign({}, process.env);
 	const watchPath = path.join(path.dirname(__dirname), 'lib', 'watch');
 	const yarnrcPath = path.join(watchPath, '.yarnrc');
 
@@ -74,13 +55,9 @@ target "${target}"
 runtime "${runtime}"`;
 
 	fs.writeFileSync(yarnrcPath, yarnrc, 'utf8');
-	yarnInstall(watchPath);
+	yarnInstall(watchPath, { env });
 }
 
 yarnInstall(`build`); // node modules required for build
-yarnInstall('test/automation'); // node modules required for smoketest
 yarnInstall('test/smoke'); // node modules required for smoketest
-yarnInstall('test/integration/browser'); // node modules required for integration
 yarnInstallBuildDependencies(); // node modules for watching, specific to host node version, not electron
-
-cp.execSync('git config pull.rebase true');

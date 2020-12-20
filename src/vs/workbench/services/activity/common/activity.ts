@@ -6,46 +6,14 @@
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 
-export interface IActivity {
-	readonly badge: IBadge;
-	readonly clazz?: string;
-	readonly priority?: number;
-}
-
-export const IActivityService = createDecorator<IActivityService>('activityService');
-
-export interface IActivityService {
-
-	readonly _serviceBrand: undefined;
-
-	/**
-	 * Show activity for the given view container
-	 */
-	showViewContainerActivity(viewContainerId: string, badge: IActivity): IDisposable;
-
-	/**
-	 * Show activity for the given view
-	 */
-	showViewActivity(viewId: string, badge: IActivity): IDisposable;
-
-	/**
-	 * Show accounts activity
-	 */
-	showAccountsActivity(activity: IActivity): IDisposable;
-
-	/**
-	 * Show global activity
-	 */
-	showGlobalActivity(activity: IActivity): IDisposable;
-}
-
 export interface IBadge {
 	getDescription(): string;
 }
 
-class BaseBadge implements IBadge {
+export class BaseBadge implements IBadge {
+	descriptorFn: (args: any) => string;
 
-	constructor(public readonly descriptorFn: (arg: any) => string) {
+	constructor(descriptorFn: (args: any) => string) {
 		this.descriptorFn = descriptorFn;
 	}
 
@@ -55,8 +23,9 @@ class BaseBadge implements IBadge {
 }
 
 export class NumberBadge extends BaseBadge {
+	number: number;
 
-	constructor(public readonly number: number, descriptorFn: (num: number) => string) {
+	constructor(number: number, descriptorFn: (args: any) => string) {
 		super(descriptorFn);
 
 		this.number = number;
@@ -68,17 +37,37 @@ export class NumberBadge extends BaseBadge {
 }
 
 export class TextBadge extends BaseBadge {
+	text: string;
 
-	constructor(public readonly text: string, descriptorFn: () => string) {
+	constructor(text: string, descriptorFn: (args: any) => string) {
 		super(descriptorFn);
+
+		this.text = text;
 	}
 }
 
 export class IconBadge extends BaseBadge {
 
-	constructor(descriptorFn: () => string) {
+	constructor(descriptorFn: (args: any) => string) {
 		super(descriptorFn);
 	}
 }
 
-export class ProgressBadge extends BaseBadge { }
+export class ProgressBadge extends BaseBadge {
+}
+
+export const IActivityService = createDecorator<IActivityService>('activityService');
+
+export interface IActivityService {
+	_serviceBrand: any;
+
+	/**
+	 * Show activity in the panel for the given panel or in the activitybar for the given viewlet or global action.
+	 */
+	showActivity(compositeOrActionId: string, badge: IBadge, clazz?: string, priority?: number): IDisposable;
+
+	/**
+	 * Returns id of pinned viewlets following the visual order
+	 */
+	getPinnedViewletIds(): string[];
+}

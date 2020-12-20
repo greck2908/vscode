@@ -4,19 +4,13 @@
 		"removeComments": false,
 		"preserveConstEnums": true,
 		"sourceMap": false,
-		"outDir": "../out/vs",
-		"target": "es2017",
-		"types": [
-			"keytar",
-			"mocha",
-			"semver",
-			"sinon",
-			"winreg",
-			"trusted-types"
-		]
+		"outDir": "../out"
 	},
 	"include": [
 		"./typings",
 		"./vs"
+	],
+	"exclude": [
+		"./typings/require-monaco.d.ts"
 	]
 }

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IDisposable } from 'vs/base/common/lifecycle';
+import { dispose, IDisposable } from 'vs/base/common/lifecycle';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { IContextKey, IContextKeyService, RawContextKey } from 'vs/platform/contextkey/common/contextkey';
 import { CompletionModel } from './completionModel';
@@ -11,18 +11,17 @@ import { ISelectedSuggestion } from './suggestWidget';
 
 export class SuggestAlternatives {
 
-	static readonly OtherSuggestions = new RawContextKey<boolean>('hasOtherSuggestions', false);
+	static OtherSuggestions = new RawContextKey<boolean>('hasOtherSuggestions', false);
 
 	private readonly _ckOtherSuggestions: IContextKey<boolean>;
-
-	private _index: number = 0;
-	private _model: CompletionModel | undefined;
-	private _acceptNext: ((selected: ISelectedSuggestion) => any) | undefined;
-	private _listener: IDisposable | undefined;
-	private _ignore: boolean | undefined;
+	private _index: number;
+	private _model: CompletionModel;
+	private _listener: IDisposable;
+	private _ignore: boolean;
 
 	constructor(
 		private readonly _editor: ICodeEditor,
+		private readonly _accept: (selected: ISelectedSuggestion) => any,
 		@IContextKeyService contextKeyService: IContextKeyService
 	) {
 		this._ckOtherSuggestions = SuggestAlternatives.OtherSuggestions.bindTo(contextKeyService);
@@ -34,13 +33,12 @@ export class SuggestAlternatives {
 
 	reset(): void {
 		this._ckOtherSuggestions.reset();
-		this._listener?.dispose();
+		dispose(this._listener);
 		this._model = undefined;
-		this._acceptNext = undefined;
 		this._ignore = false;
 	}
 
-	set({ model, index }: ISelectedSuggestion, acceptNext: (selected: ISelectedSuggestion) => any): void {
+	set({ model, index }: ISelectedSuggestion): void {
 
 		// no suggestions -> nothing to do
 		if (model.items.length === 0) {
@@ -55,7 +53,6 @@ export class SuggestAlternatives {
 			return;
 		}
 
-		this._acceptNext = acceptNext;
 		this._model = model;
 		this._index = index;
 		this._listener = this._editor.onDidChangeCursorPosition(() => {
@@ -73,7 +70,7 @@ export class SuggestAlternatives {
 			if (newIndex === index) {
 				break;
 			}
-			if (!model.items[newIndex].completion.additionalTextEdits) {
+			if (!model.items[newIndex].suggestion.additionalTextEdits) {
 				break;
 			}
 		}
@@ -96,7 +93,7 @@ export class SuggestAlternatives {
 		try {
 			this._ignore = true;
 			this._index = SuggestAlternatives._moveIndex(fwd, this._model, this._index);
-			this._acceptNext!({ index: this._index, item: this._model.items[this._index], model: this._model });
+			this._accept({ index: this._index, item: this._model.items[this._index], model: this._model });
 		} finally {
 			this._ignore = false;
 		}

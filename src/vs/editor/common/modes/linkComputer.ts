@@ -3,16 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ILink } from 'vs/editor/common/modes';
 import { CharCode } from 'vs/base/common/charCode';
 import { CharacterClassifier } from 'vs/editor/common/core/characterClassifier';
-import { ILink } from 'vs/editor/common/modes';
+import { Uint8Matrix } from 'vs/editor/common/core/uint';
 
 export interface ILinkComputerTarget {
 	getLineCount(): number;
 	getLineContent(lineNumber: number): string;
 }
 
-export const enum State {
+const enum State {
 	Invalid = 0,
 	Start = 1,
 	H = 2,
@@ -26,42 +27,15 @@ export const enum State {
 	AfterColon = 10,
 	AlmostThere = 11,
 	End = 12,
-	Accept = 13,
-	LastKnownState = 14 // marker, custom states may follow
+	Accept = 13
 }
 
-export type Edge = [State, number, State];
+type Edge = [State, number, State];
 
-export class Uint8Matrix {
+class StateMachine {
 
-	private readonly _data: Uint8Array;
-	public readonly rows: number;
-	public readonly cols: number;
-
-	constructor(rows: number, cols: number, defaultValue: number) {
-		const data = new Uint8Array(rows * cols);
-		for (let i = 0, len = rows * cols; i < len; i++) {
-			data[i] = defaultValue;
-		}
-
-		this._data = data;
-		this.rows = rows;
-		this.cols = cols;
-	}
-
-	public get(row: number, col: number): number {
-		return this._data[row * this.cols + col];
-	}
-
-	public set(row: number, col: number, value: number): void {
-		this._data[row * this.cols + col] = value;
-	}
-}
-
-export class StateMachine {
-
-	private readonly _states: Uint8Matrix;
-	private readonly _maxCharCode: number;
+	private _states: Uint8Matrix;
+	private _maxCharCode: number;
 
 	constructor(edges: Edge[]) {
 		let maxCharCode = 0;
@@ -154,7 +128,7 @@ function getClassifier(): CharacterClassifier<CharacterClass> {
 	if (_classifier === null) {
 		_classifier = new CharacterClassifier<CharacterClass>(CharacterClass.None);
 
-		const FORCE_TERMINATION_CHARACTERS = ' \t<>\'\"、。｡､，．：；‘“〈《「『【〔（［｛｢｣｝］）〕】』」》〉”’｀～…';
+		const FORCE_TERMINATION_CHARACTERS = ' \t<>\'\"、。｡､，．：；？！＠＃＄％＆＊‘“〈《「『【〔（［｛｢｣｝］）〕】』」》〉”’｀～…';
 		for (let i = 0; i < FORCE_TERMINATION_CHARACTERS.length; i++) {
 			_classifier.set(FORCE_TERMINATION_CHARACTERS.charCodeAt(i), CharacterClass.ForceTermination);
 		}
@@ -167,7 +141,7 @@ function getClassifier(): CharacterClassifier<CharacterClass> {
 	return _classifier;
 }
 
-export class LinkComputer {
+class LinkComputer {
 
 	private static _createLink(classifier: CharacterClassifier<CharacterClass>, line: string, lineNumber: number, linkBeginIndex: number, linkEndIndex: number): ILink {
 		// Do not allow to end link in certain characters...
@@ -209,7 +183,8 @@ export class LinkComputer {
 		};
 	}
 
-	public static computeLinks(model: ILinkComputerTarget, stateMachine: StateMachine = getStateMachine()): ILink[] {
+	public static computeLinks(model: ILinkComputerTarget): ILink[] {
+		const stateMachine = getStateMachine();
 		const classifier = getClassifier();
 
 		let result: ILink[] = [];
@@ -223,7 +198,6 @@ export class LinkComputer {
 			let state = State.Start;
 			let hasOpenParens = false;
 			let hasOpenSquareBracket = false;
-			let inSquareBrackets = false;
 			let hasOpenCurlyBracket = false;
 
 			while (j < len) {
@@ -242,12 +216,10 @@ export class LinkComputer {
 							chClass = (hasOpenParens ? CharacterClass.None : CharacterClass.ForceTermination);
 							break;
 						case CharCode.OpenSquareBracket:
-							inSquareBrackets = true;
 							hasOpenSquareBracket = true;
 							chClass = CharacterClass.None;
 							break;
 						case CharCode.CloseSquareBracket:
-							inSquareBrackets = false;
 							chClass = (hasOpenSquareBracket ? CharacterClass.None : CharacterClass.ForceTermination);
 							break;
 						case CharCode.OpenCurlyBrace:
@@ -267,18 +239,6 @@ export class LinkComputer {
 						case CharCode.BackTick:
 							chClass = (linkBeginChCode === CharCode.SingleQuote || linkBeginChCode === CharCode.DoubleQuote) ? CharacterClass.None : CharacterClass.ForceTermination;
 							break;
-						case CharCode.Asterisk:
-							// `*` terminates a link if the link began with `*`
-							chClass = (linkBeginChCode === CharCode.Asterisk) ? CharacterClass.ForceTermination : CharacterClass.None;
-							break;
-						case CharCode.Pipe:
-							// `|` terminates a link if the link began with `|`
-							chClass = (linkBeginChCode === CharCode.Pipe) ? CharacterClass.ForceTermination : CharacterClass.None;
-							break;
-						case CharCode.Space:
-							// ` ` allow space in between [ and ]
-							chClass = (inSquareBrackets ? CharacterClass.None : CharacterClass.ForceTermination);
-							break;
 						default:
 							chClass = classifier.get(chCode);
 					}
@@ -289,15 +249,7 @@ export class LinkComputer {
 						resetStateMachine = true;
 					}
 				} else if (state === State.End) {
-
-					let chClass: CharacterClass;
-					if (chCode === CharCode.OpenSquareBracket) {
-						// Allow for the authority part to contain ipv6 addresses which contain [ and ]
-						hasOpenSquareBracket = true;
-						chClass = CharacterClass.None;
-					} else {
-						chClass = classifier.get(chCode);
-					}
+					const chClass = classifier.get(chCode);
 
 					// Check if character terminates link
 					if (chClass === CharacterClass.ForceTermination) {
@@ -341,7 +293,7 @@ export class LinkComputer {
  * document. *Note* that this operation is computational
  * expensive and should not run in the UI thread.
  */
-export function computeLinks(model: ILinkComputerTarget | null): ILink[] {
+export function computeLinks(model: ILinkComputerTarget): ILink[] {
 	if (!model || typeof model.getLineCount !== 'function' || typeof model.getLineContent !== 'function') {
 		// Unknown caller!
 		return [];

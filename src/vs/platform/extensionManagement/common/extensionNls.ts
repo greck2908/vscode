@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { cloneAndChange } from 'vs/base/common/objects';
-import { IExtensionManifest } from 'vs/platform/extensions/common/extensions';
+import { IExtensionManifest } from 'vs/platform/extensionManagement/common/extensionManagement';
 
 const nlsRegex = /^%([\w\d.-]+)%$/i;
 
@@ -13,7 +13,7 @@ export interface ITranslations {
 }
 
 export function localizeManifest(manifest: IExtensionManifest, translations: ITranslations): IExtensionManifest {
-	const patcher = (value: string) => {
+	const patcher = value => {
 		if (typeof value !== 'string') {
 			return undefined;
 		}

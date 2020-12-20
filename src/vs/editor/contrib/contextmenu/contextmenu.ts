@@ -4,37 +4,39 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
+import { IAction } from 'vs/base/common/actions';
+import { ResolvedKeybinding, KeyCode, KeyMod } from 'vs/base/common/keyCodes';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import * as dom from 'vs/base/browser/dom';
 import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
-import { IAnchor } from 'vs/base/browser/ui/contextview/contextview';
-import { IAction, Separator, SubmenuAction } from 'vs/base/common/actions';
-import { KeyCode, KeyMod, ResolvedKeybinding } from 'vs/base/common/keyCodes';
-import { DisposableStore } from 'vs/base/common/lifecycle';
-import { ICodeEditor, IEditorMouseEvent, MouseTargetType } from 'vs/editor/browser/editorBrowser';
-import { EditorAction, ServicesAccessor, registerEditorAction, registerEditorContribution } from 'vs/editor/browser/editorExtensions';
-import { IEditorContribution, ScrollType } from 'vs/editor/common/editorCommon';
-import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
-import { IMenuService, MenuId, SubmenuItemAction } from 'vs/platform/actions/common/actions';
-import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
+import { ActionItem, Separator } from 'vs/base/browser/ui/actionbar/actionbar';
 import { IContextMenuService, IContextViewService } from 'vs/platform/contextview/browser/contextView';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
+import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
+import { IMenuService, MenuId } from 'vs/platform/actions/common/actions';
+import { IEditorContribution, IScrollEvent, ScrollType } from 'vs/editor/common/editorCommon';
+import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
+import { registerEditorAction, registerEditorContribution, ServicesAccessor, EditorAction } from 'vs/editor/browser/editorExtensions';
+import { ICodeEditor, IEditorMouseEvent, MouseTargetType } from 'vs/editor/browser/editorBrowser';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { ITextModel } from 'vs/editor/common/model';
-import { IMouseWheelEvent } from 'vs/base/browser/mouseEvent';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
-import { ActionViewItem } from 'vs/base/browser/ui/actionbar/actionViewItems';
+import { IAnchor } from 'vs/base/browser/ui/contextview/contextview';
+
+export interface IPosition {
+	x: number;
+	y: number;
+}
 
 export class ContextMenuController implements IEditorContribution {
 
-	public static readonly ID = 'editor.contrib.contextmenu';
+	private static readonly ID = 'editor.contrib.contextmenu';
 
 	public static get(editor: ICodeEditor): ContextMenuController {
 		return editor.getContribution<ContextMenuController>(ContextMenuController.ID);
 	}
 
-	private readonly _toDispose = new DisposableStore();
+	private _toDispose: IDisposable[] = [];
 	private _contextMenuIsBeingShownCount: number = 0;
-	private readonly _editor: ICodeEditor;
+	private _editor: ICodeEditor;
 
 	constructor(
 		editor: ICodeEditor,
@@ -46,20 +48,13 @@ export class ContextMenuController implements IEditorContribution {
 	) {
 		this._editor = editor;
 
-		this._toDispose.add(this._editor.onContextMenu((e: IEditorMouseEvent) => this._onContextMenu(e)));
-		this._toDispose.add(this._editor.onMouseWheel((e: IMouseWheelEvent) => {
+		this._toDispose.push(this._editor.onContextMenu((e: IEditorMouseEvent) => this._onContextMenu(e)));
+		this._toDispose.push(this._editor.onDidScrollChange((e: IScrollEvent) => {
 			if (this._contextMenuIsBeingShownCount > 0) {
-				const view = this._contextViewService.getContextViewElement();
-				const target = e.srcElement as HTMLElement;
-
-				// Event triggers on shadow root host first
-				// Check if the context view is under this host before hiding it #103169
-				if (!(target.shadowRoot && dom.getShadowRoot(view) === target.shadowRoot)) {
-					this._contextViewService.hideContextView();
-				}
+				this._contextViewService.hideContextView();
 			}
 		}));
-		this._toDispose.add(this._editor.onKeyDown((e: IKeyboardEvent) => {
+		this._toDispose.push(this._editor.onKeyDown((e: IKeyboardEvent) => {
 			if (e.keyCode === KeyCode.ContextMenu) {
 				// Chrome is funny like that
 				e.preventDefault();
@@ -70,11 +65,7 @@ export class ContextMenuController implements IEditorContribution {
 	}
 
 	private _onContextMenu(e: IEditorMouseEvent): void {
-		if (!this._editor.hasModel()) {
-			return;
-		}
-
-		if (!this._editor.getOption(EditorOption.contextmenu)) {
+		if (!this._editor.getConfiguration().contribInfo.contextmenu) {
 			this._editor.focus();
 			// Ensure the cursor is at the position of the mouse click
 			if (e.target.position && !this._editor.getSelection().containsPosition(e.target.position)) {
@@ -97,36 +88,23 @@ export class ContextMenuController implements IEditorContribution {
 		this._editor.focus();
 
 		// Ensure the cursor is at the position of the mouse click
-		if (e.target.position) {
-			let hasSelectionAtPosition = false;
-			for (const selection of this._editor.getSelections()) {
-				if (selection.containsPosition(e.target.position)) {
-					hasSelectionAtPosition = true;
-					break;
-				}
-			}
-
-			if (!hasSelectionAtPosition) {
-				this._editor.setPosition(e.target.position);
-			}
+		if (e.target.position && !this._editor.getSelection().containsPosition(e.target.position)) {
+			this._editor.setPosition(e.target.position);
 		}
 
 		// Unless the user triggerd the context menu through Shift+F10, use the mouse position as menu position
-		let anchor: IAnchor | null = null;
+		let forcedPosition: IPosition;
 		if (e.target.type !== MouseTargetType.TEXTAREA) {
-			anchor = { x: e.event.posx - 1, width: 2, y: e.event.posy - 1, height: 2 };
+			forcedPosition = { x: e.event.posx, y: e.event.posy + 1 };
 		}
 
 		// Show the context menu
-		this.showContextMenu(anchor);
+		this.showContextMenu(forcedPosition);
 	}
 
-	public showContextMenu(anchor?: IAnchor | null): void {
-		if (!this._editor.getOption(EditorOption.contextmenu)) {
+	public showContextMenu(forcedPosition?: IPosition): void {
+		if (!this._editor.getConfiguration().contribInfo.contextmenu) {
 			return; // Context menu is turned off through configuration
-		}
-		if (!this._editor.hasModel()) {
-			return;
 		}
 
 		if (!this._contextMenuService) {
@@ -135,64 +113,41 @@ export class ContextMenuController implements IEditorContribution {
 		}
 
 		// Find actions available for menu
-		const menuActions = this._getMenuActions(this._editor.getModel(), MenuId.EditorContext);
+		const menuActions = this._getMenuActions();
 
 		// Show menu if we have actions to show
 		if (menuActions.length > 0) {
-			this._doShowContextMenu(menuActions, anchor);
+			this._doShowContextMenu(menuActions, forcedPosition);
 		}
 	}
 
-	private _getMenuActions(model: ITextModel, menuId: MenuId): IAction[] {
+	private _getMenuActions(): IAction[] {
 		const result: IAction[] = [];
 
-		// get menu groups
-		const menu = this._menuService.createMenu(menuId, this._contextKeyService);
-		const groups = menu.getActions({ arg: model.uri });
-		menu.dispose();
+		let contextMenu = this._menuService.createMenu(MenuId.EditorContext, this._contextKeyService);
+		const groups = contextMenu.getActions({ arg: this._editor.getModel().uri });
+		contextMenu.dispose();
 
-		// translate them into other actions
 		for (let group of groups) {
 			const [, actions] = group;
-			let addedItems = 0;
-			for (const action of actions) {
-				if (action instanceof SubmenuItemAction) {
-					const subActions = this._getMenuActions(model, action.item.submenu);
-					if (subActions.length > 0) {
-						result.push(new SubmenuAction(action.id, action.label, subActions));
-						addedItems++;
-					}
-				} else {
-					result.push(action);
-					addedItems++;
-				}
-			}
-
-			if (addedItems) {
-				result.push(new Separator());
-			}
+			result.push(...actions);
+			result.push(new Separator());
 		}
-
-		if (result.length) {
-			result.pop(); // remove last separator
-		}
-
+		result.pop(); // remove last separator
 		return result;
 	}
 
-	private _doShowContextMenu(actions: IAction[], anchor: IAnchor | null = null): void {
-		if (!this._editor.hasModel()) {
-			return;
-		}
+	private _doShowContextMenu(actions: IAction[], forcedPosition: IPosition | null = null): void {
 
 		// Disable hover
-		const oldHoverSetting = this._editor.getOption(EditorOption.hover);
+		const oldHoverSetting = this._editor.getConfiguration().contribInfo.hover;
 		this._editor.updateOptions({
 			hover: {
 				enabled: false
 			}
 		});
 
+		let anchor: IAnchor = forcedPosition;
 		if (!anchor) {
 			// Ensure selection is visible
 			this._editor.revealPosition(this._editor.getPosition(), ScrollType.Immediate);
@@ -208,30 +163,34 @@ export class ContextMenuController implements IEditorContribution {
 			anchor = { x: posx, y: posy };
 		}
 
+		// prevent menu from appearing right below the cursor
+		anchor.height = 1;
+		anchor.width = 2;
+
 		// Show menu
 		this._contextMenuIsBeingShownCount++;
 		this._contextMenuService.showContextMenu({
-			domForShadowRoot: this._editor.getDomNode(),
+			getAnchor: () => anchor,
 
-			getAnchor: () => anchor!,
-
-			getActions: () => actions,
-
-			getActionViewItem: (action) => {
-				const keybinding = this._keybindingFor(action);
-				if (keybinding) {
-					return new ActionViewItem(action, action, { label: true, keybinding: keybinding.getLabel(), isMenu: true });
-				}
-
-				const customActionViewItem = <any>action;
-				if (typeof customActionViewItem.getActionViewItem === 'function') {
-					return customActionViewItem.getActionViewItem();
-				}
-
-				return new ActionViewItem(action, action, { icon: true, label: true, isMenu: true });
+			getActions: () => {
+				return Promise.resolve(actions);
 			},
 
-			getKeyBinding: (action): ResolvedKeybinding | undefined => {
+			getActionItem: (action) => {
+				const keybinding = this._keybindingFor(action);
+				if (keybinding) {
+					return new ActionItem(action, action, { label: true, keybinding: keybinding.getLabel(), isMenu: true });
+				}
+
+				const customActionItem = <any>action;
+				if (typeof customActionItem.getActionItem === 'function') {
+					return customActionItem.getActionItem();
+				}
+
+				return new ActionItem(action, action, { icon: true, label: true, isMenu: true });
+			},
+
+			getKeyBinding: (action): ResolvedKeybinding => {
 				return this._keybindingFor(action);
 			},
 
@@ -245,8 +204,12 @@ export class ContextMenuController implements IEditorContribution {
 		});
 	}
 
-	private _keybindingFor(action: IAction): ResolvedKeybinding | undefined {
+	private _keybindingFor(action: IAction): ResolvedKeybinding {
 		return this._keybindingService.lookupKeybinding(action.id);
+	}
+
+	public getId(): string {
+		return ContextMenuController.ID;
 	}
 
 	public dispose(): void {
@@ -254,7 +217,7 @@ export class ContextMenuController implements IEditorContribution {
 			this._contextViewService.hideContextView();
 		}
 
-		this._toDispose.dispose();
+		this._toDispose = dispose(this._toDispose);
 	}
 }
 
@@ -265,7 +228,7 @@ class ShowContextMenu extends EditorAction {
 			id: 'editor.action.showContextMenu',
 			label: nls.localize('action.showContextMenu.label', "Show Editor Context Menu"),
 			alias: 'Show Editor Context Menu',
-			precondition: undefined,
+			precondition: null,
 			kbOpts: {
 				kbExpr: EditorContextKeys.textInputFocus,
 				primary: KeyMod.Shift | KeyCode.F10,
@@ -280,5 +243,5 @@ class ShowContextMenu extends EditorAction {
 	}
 }
 
-registerEditorContribution(ContextMenuController.ID, ContextMenuController);
+registerEditorContribution(ContextMenuController);
 registerEditorAction(ShowContextMenu);

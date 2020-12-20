@@ -4,20 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IDisposable } from 'vs/base/common/lifecycle';
-import { IActiveCodeEditor } from 'vs/editor/browser/editorBrowser';
 import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
-import { FindMatch, IModelDecorationsChangeAccessor, IModelDeltaDecoration, OverviewRulerLane, TrackedRangeStickiness, MinimapPosition } from 'vs/editor/common/model';
 import { ModelDecorationOptions } from 'vs/editor/common/model/textModel';
-import { overviewRulerFindMatchForeground, minimapFindMatch } from 'vs/platform/theme/common/colorRegistry';
+import { overviewRulerFindMatchForeground } from 'vs/platform/theme/common/colorRegistry';
 import { themeColorFromId } from 'vs/platform/theme/common/themeService';
+import { IActiveCodeEditor } from 'vs/editor/browser/editorBrowser';
+import { IModelDecorationsChangeAccessor, FindMatch, IModelDeltaDecoration, TrackedRangeStickiness, OverviewRulerLane } from 'vs/editor/common/model';
 
 export class FindDecorations implements IDisposable {
 
-	private readonly _editor: IActiveCodeEditor;
+	private _editor: IActiveCodeEditor;
 	private _decorations: string[];
 	private _overviewRulerApproximateDecorations: string[];
-	private _findScopeDecorationIds: string[];
+	private _findScopeDecorationId: string | null;
 	private _rangeHighlightDecorationId: string | null;
 	private _highlightedDecorationId: string | null;
 	private _startPosition: Position;
@@ -26,7 +26,7 @@ export class FindDecorations implements IDisposable {
 		this._editor = editor;
 		this._decorations = [];
 		this._overviewRulerApproximateDecorations = [];
-		this._findScopeDecorationIds = [];
+		this._findScopeDecorationId = null;
 		this._rangeHighlightDecorationId = null;
 		this._highlightedDecorationId = null;
 		this._startPosition = this._editor.getPosition();
@@ -37,7 +37,7 @@ export class FindDecorations implements IDisposable {
 
 		this._decorations = [];
 		this._overviewRulerApproximateDecorations = [];
-		this._findScopeDecorationIds = [];
+		this._findScopeDecorationId = null;
 		this._rangeHighlightDecorationId = null;
 		this._highlightedDecorationId = null;
 	}
@@ -45,7 +45,7 @@ export class FindDecorations implements IDisposable {
 	public reset(): void {
 		this._decorations = [];
 		this._overviewRulerApproximateDecorations = [];
-		this._findScopeDecorationIds = [];
+		this._findScopeDecorationId = null;
 		this._rangeHighlightDecorationId = null;
 		this._highlightedDecorationId = null;
 	}
@@ -54,22 +54,9 @@ export class FindDecorations implements IDisposable {
 		return this._decorations.length;
 	}
 
-	/** @deprecated use getFindScopes to support multiple selections */
 	public getFindScope(): Range | null {
-		if (this._findScopeDecorationIds[0]) {
-			return this._editor.getModel().getDecorationRange(this._findScopeDecorationIds[0]);
-		}
-		return null;
-	}
-
-	public getFindScopes(): Range[] | null {
-		if (this._findScopeDecorationIds.length) {
-			const scopes = this._findScopeDecorationIds.map(findScopeDecorationId =>
-				this._editor.getModel().getDecorationRange(findScopeDecorationId)
-			).filter(element => !!element);
-			if (scopes.length) {
-				return scopes as Range[];
-			}
+		if (this._findScopeDecorationId) {
+			return this._editor.getModel().getDecorationRange(this._findScopeDecorationId);
 		}
 		return null;
 	}
@@ -93,14 +80,14 @@ export class FindDecorations implements IDisposable {
 
 	public getCurrentMatchesPosition(desiredRange: Range): number {
 		let candidates = this._editor.getModel().getDecorationsInRange(desiredRange);
-		for (const candidate of candidates) {
+		for (let i = 0, len = candidates.length; i < len; i++) {
+			const candidate = candidates[i];
 			const candidateOpts = candidate.options;
 			if (candidateOpts === FindDecorations._FIND_MATCH_DECORATION || candidateOpts === FindDecorations._CURRENT_FIND_MATCH_DECORATION) {
 				return this._getDecorationIndex(candidate.id);
 			}
 		}
-		// We don't know the current match position, so returns zero to show '?' in find widget
-		return 0;
+		return 1;
 	}
 
 	public setCurrentFindMatch(nextMatch: Range | null): number {
@@ -146,7 +133,7 @@ export class FindDecorations implements IDisposable {
 		return matchPosition;
 	}
 
-	public set(findMatches: FindMatch[], findScopes: Range[] | null): void {
+	public set(findMatches: FindMatch[], findScope: Range | null): void {
 		this._editor.changeDecorations((accessor) => {
 
 			let findMatchesOptions: ModelDecorationOptions = FindDecorations._FIND_MATCH_DECORATION;
@@ -208,12 +195,12 @@ export class FindDecorations implements IDisposable {
 			}
 
 			// Find scope
-			if (this._findScopeDecorationIds.length) {
-				this._findScopeDecorationIds.forEach(findScopeDecorationId => accessor.removeDecoration(findScopeDecorationId));
-				this._findScopeDecorationIds = [];
+			if (this._findScopeDecorationId) {
+				accessor.removeDecoration(this._findScopeDecorationId);
+				this._findScopeDecorationId = null;
 			}
-			if (findScopes?.length) {
-				this._findScopeDecorationIds = findScopes.map(findScope => accessor.addDecoration(findScope, FindDecorations._FIND_SCOPE_DECORATION));
+			if (findScope) {
+				this._findScopeDecorationId = accessor.addDecoration(findScope, FindDecorations._FIND_SCOPE_DECORATION);
 			}
 		});
 	}
@@ -266,8 +253,8 @@ export class FindDecorations implements IDisposable {
 		let result: string[] = [];
 		result = result.concat(this._decorations);
 		result = result.concat(this._overviewRulerApproximateDecorations);
-		if (this._findScopeDecorationIds.length) {
-			result.push(...this._findScopeDecorationIds);
+		if (this._findScopeDecorationId) {
+			result.push(this._findScopeDecorationId);
 		}
 		if (this._rangeHighlightDecorationId) {
 			result.push(this._rangeHighlightDecorationId);
@@ -275,7 +262,7 @@ export class FindDecorations implements IDisposable {
 		return result;
 	}
 
-	public static readonly _CURRENT_FIND_MATCH_DECORATION = ModelDecorationOptions.register({
+	private static readonly _CURRENT_FIND_MATCH_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		zIndex: 13,
 		className: 'currentFindMatch',
@@ -283,28 +270,20 @@ export class FindDecorations implements IDisposable {
 		overviewRuler: {
 			color: themeColorFromId(overviewRulerFindMatchForeground),
 			position: OverviewRulerLane.Center
-		},
-		minimap: {
-			color: themeColorFromId(minimapFindMatch),
-			position: MinimapPosition.Inline
 		}
 	});
 
-	public static readonly _FIND_MATCH_DECORATION = ModelDecorationOptions.register({
+	private static readonly _FIND_MATCH_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		className: 'findMatch',
 		showIfCollapsed: true,
 		overviewRuler: {
 			color: themeColorFromId(overviewRulerFindMatchForeground),
 			position: OverviewRulerLane.Center
-		},
-		minimap: {
-			color: themeColorFromId(minimapFindMatch),
-			position: MinimapPosition.Inline
 		}
 	});
 
-	public static readonly _FIND_MATCH_NO_OVERVIEW_DECORATION = ModelDecorationOptions.register({
+	private static readonly _FIND_MATCH_NO_OVERVIEW_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		className: 'findMatch',
 		showIfCollapsed: true

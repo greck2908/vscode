@@ -4,39 +4,38 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./accessibilityHelp';
-import * as dom from 'vs/base/browser/dom';
-import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
-import { renderFormattedText } from 'vs/base/browser/formattedTextRenderer';
-import { alert } from 'vs/base/browser/ui/aria/aria';
-import { Widget } from 'vs/base/browser/ui/widget';
+import * as nls from 'vs/nls';
 import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
 import { Disposable } from 'vs/base/common/lifecycle';
-import * as platform from 'vs/base/common/platform';
 import * as strings from 'vs/base/common/strings';
-import { URI } from 'vs/base/common/uri';
-import { ICodeEditor, IOverlayWidget, IOverlayWidgetPosition } from 'vs/editor/browser/editorBrowser';
-import { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand, registerEditorContribution } from 'vs/editor/browser/editorExtensions';
-import { Selection } from 'vs/editor/common/core/selection';
+import * as dom from 'vs/base/browser/dom';
+import { renderFormattedText } from 'vs/base/browser/htmlContentRenderer';
+import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
+import { Widget } from 'vs/base/browser/ui/widget';
+import { ServicesAccessor, IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
+import { RawContextKey, IContextKey, IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { IEditorContribution } from 'vs/editor/common/editorCommon';
 import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
+import { registerEditorAction, registerEditorContribution, EditorAction, EditorCommand, registerEditorCommand } from 'vs/editor/browser/editorExtensions';
+import { ICodeEditor, IOverlayWidget, IOverlayWidgetPosition } from 'vs/editor/browser/editorBrowser';
 import { ToggleTabFocusModeAction } from 'vs/editor/contrib/toggleTabFocusMode/toggleTabFocusMode';
-import { IStandaloneEditorConstructionOptions } from 'vs/editor/standalone/browser/standaloneCodeEditor';
-import { IContextKey, IContextKeyService, RawContextKey } from 'vs/platform/contextkey/common/contextkey';
-import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
-import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
-import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { IOpenerService } from 'vs/platform/opener/common/opener';
-import { contrastBorder, editorWidgetBackground, widgetShadow, editorWidgetForeground } from 'vs/platform/theme/common/colorRegistry';
 import { registerThemingParticipant } from 'vs/platform/theme/common/themeService';
-import { AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
-import { AccessibilityHelpNLS } from 'vs/editor/common/standaloneStrings';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
+import { editorWidgetBackground, widgetShadow, contrastBorder } from 'vs/platform/theme/common/colorRegistry';
+import * as platform from 'vs/base/common/platform';
+import { alert } from 'vs/base/browser/ui/aria/aria';
+import { IOpenerService } from 'vs/platform/opener/common/opener';
+import { URI } from 'vs/base/common/uri';
+import { Selection } from 'vs/editor/common/core/selection';
+import * as browser from 'vs/base/browser/browser';
+import { IEditorConstructionOptions } from 'vs/editor/standalone/browser/standaloneCodeEditor';
+import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 
 const CONTEXT_ACCESSIBILITY_WIDGET_VISIBLE = new RawContextKey<boolean>('accessibilityHelpWidgetVisible', false);
 
 class AccessibilityHelpController extends Disposable
 	implements IEditorContribution {
-	public static readonly ID = 'editor.contrib.accessibilityHelpController';
+	private static readonly ID = 'editor.contrib.accessibilityHelpController';
 
 	public static get(editor: ICodeEditor): AccessibilityHelpController {
 		return editor.getContribution<AccessibilityHelpController>(
@@ -44,8 +43,8 @@ class AccessibilityHelpController extends Disposable
 		);
 	}
 
-	private readonly _editor: ICodeEditor;
-	private readonly _widget: AccessibilityHelpWidget;
+	private _editor: ICodeEditor;
+	private _widget: AccessibilityHelpWidget;
 
 	constructor(
 		editor: ICodeEditor,
@@ -59,6 +58,10 @@ class AccessibilityHelpController extends Disposable
 		);
 	}
 
+	public getId(): string {
+		return AccessibilityHelpController.ID;
+	}
+
 	public show(): void {
 		this._widget.show();
 	}
@@ -68,29 +71,34 @@ class AccessibilityHelpController extends Disposable
 	}
 }
 
+const nlsNoSelection = nls.localize("noSelection", "No selection");
+const nlsSingleSelectionRange = nls.localize("singleSelectionRange", "Line {0}, Column {1} ({2} selected)");
+const nlsSingleSelection = nls.localize("singleSelection", "Line {0}, Column {1}");
+const nlsMultiSelectionRange = nls.localize("multiSelectionRange", "{0} selections ({1} characters selected)");
+const nlsMultiSelection = nls.localize("multiSelection", "{0} selections");
 
-function getSelectionLabel(selections: Selection[] | null, charactersSelected: number): string {
+function getSelectionLabel(selections: Selection[] | null, charactersSelected: number): string | null {
 	if (!selections || selections.length === 0) {
-		return AccessibilityHelpNLS.noSelection;
+		return nlsNoSelection;
 	}
 
 	if (selections.length === 1) {
 		if (charactersSelected) {
-			return strings.format(AccessibilityHelpNLS.singleSelectionRange, selections[0].positionLineNumber, selections[0].positionColumn, charactersSelected);
+			return strings.format(nlsSingleSelectionRange, selections[0].positionLineNumber, selections[0].positionColumn, charactersSelected);
 		}
 
-		return strings.format(AccessibilityHelpNLS.singleSelection, selections[0].positionLineNumber, selections[0].positionColumn);
+		return strings.format(nlsSingleSelection, selections[0].positionLineNumber, selections[0].positionColumn);
 	}
 
 	if (charactersSelected) {
-		return strings.format(AccessibilityHelpNLS.multiSelectionRange, selections.length, charactersSelected);
+		return strings.format(nlsMultiSelectionRange, selections.length, charactersSelected);
 	}
 
 	if (selections.length > 0) {
-		return strings.format(AccessibilityHelpNLS.multiSelection, selections.length);
+		return strings.format(nlsMultiSelection, selections.length);
 	}
 
-	return '';
+	return null;
 }
 
 class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
@@ -98,11 +106,11 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 	private static readonly WIDTH = 500;
 	private static readonly HEIGHT = 300;
 
-	private readonly _editor: ICodeEditor;
-	private readonly _domNode: FastDomNode<HTMLElement>;
-	private readonly _contentDomNode: FastDomNode<HTMLElement>;
+	private _editor: ICodeEditor;
+	private _domNode: FastDomNode<HTMLElement>;
+	private _contentDomNode: FastDomNode<HTMLElement>;
 	private _isVisible: boolean;
-	private readonly _isVisibleKey: IContextKey<boolean>;
+	private _isVisibleKey: IContextKey<boolean>;
 
 	constructor(
 		editor: ICodeEditor,
@@ -142,7 +150,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 			}
 
 			if (e.equals(KeyMod.CtrlCmd | KeyCode.KEY_E)) {
-				alert(AccessibilityHelpNLS.emergencyConfOn);
+				alert(nls.localize("emergencyConfOn", "Now changing the setting `accessibilitySupport` to 'on'."));
 
 				this._editor.updateOptions({
 					accessibilitySupport: 'on'
@@ -157,9 +165,9 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 			}
 
 			if (e.equals(KeyMod.CtrlCmd | KeyCode.KEY_H)) {
-				alert(AccessibilityHelpNLS.openingDocs);
+				alert(nls.localize("openingDocs", "Now opening the Editor Accessibility documentation page."));
 
-				let url = (<IStandaloneEditorConstructionOptions>this._editor.getRawOptions()).accessibilityHelpUrl;
+				let url = (<IEditorConstructionOptions>this._editor.getRawConfiguration()).accessibilityHelpUrl;
 				if (typeof url === 'undefined') {
 					url = 'https://go.microsoft.com/fwlink/?linkid=852450';
 				}
@@ -219,7 +227,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 	}
 
 	private _buildContent() {
-		const options = this._editor.getOptions();
+		let opts = this._editor.getConfiguration();
 
 		const selections = this._editor.getSelections();
 		let charactersSelected = 0;
@@ -235,54 +243,58 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 
 		let text = getSelectionLabel(selections, charactersSelected);
 
-		if (options.get(EditorOption.inDiffEditor)) {
-			if (options.get(EditorOption.readOnly)) {
-				text += AccessibilityHelpNLS.readonlyDiffEditor;
+		if (opts.wrappingInfo.inDiffEditor) {
+			if (opts.readOnly) {
+				text += nls.localize("readonlyDiffEditor", " in a read-only pane of a diff editor.");
 			} else {
-				text += AccessibilityHelpNLS.editableDiffEditor;
+				text += nls.localize("editableDiffEditor", " in a pane of a diff editor.");
 			}
 		} else {
-			if (options.get(EditorOption.readOnly)) {
-				text += AccessibilityHelpNLS.readonlyEditor;
+			if (opts.readOnly) {
+				text += nls.localize("readonlyEditor", " in a read-only code editor");
 			} else {
-				text += AccessibilityHelpNLS.editableEditor;
+				text += nls.localize("editableEditor", " in a code editor");
 			}
 		}
 
 		const turnOnMessage = (
 			platform.isMacintosh
-				? AccessibilityHelpNLS.changeConfigToOnMac
-				: AccessibilityHelpNLS.changeConfigToOnWinLinux
+				? nls.localize("changeConfigToOnMac", "To configure the editor to be optimized for usage with a Screen Reader press Command+E now.")
+				: nls.localize("changeConfigToOnWinLinux", "To configure the editor to be optimized for usage with a Screen Reader press Control+E now.")
 		);
-		switch (options.get(EditorOption.accessibilitySupport)) {
-			case AccessibilitySupport.Unknown:
+		switch (opts.accessibilitySupport) {
+			case platform.AccessibilitySupport.Unknown:
 				text += '\n\n - ' + turnOnMessage;
 				break;
-			case AccessibilitySupport.Enabled:
-				text += '\n\n - ' + AccessibilityHelpNLS.auto_on;
+			case platform.AccessibilitySupport.Enabled:
+				text += '\n\n - ' + nls.localize("auto_on", "The editor is configured to be optimized for usage with a Screen Reader.");
 				break;
-			case AccessibilitySupport.Disabled:
-				text += '\n\n - ' + AccessibilityHelpNLS.auto_off;
+			case platform.AccessibilitySupport.Disabled:
+				text += '\n\n - ' + nls.localize("auto_off", "The editor is configured to never be optimized for usage with a Screen Reader, which is not the case at this time.");
 				text += ' ' + turnOnMessage;
 				break;
 		}
 
+		const NLS_TAB_FOCUS_MODE_ON = nls.localize("tabFocusModeOnMsg", "Pressing Tab in the current editor will move focus to the next focusable element. Toggle this behavior by pressing {0}.");
+		const NLS_TAB_FOCUS_MODE_ON_NO_KB = nls.localize("tabFocusModeOnMsgNoKb", "Pressing Tab in the current editor will move focus to the next focusable element. The command {0} is currently not triggerable by a keybinding.");
+		const NLS_TAB_FOCUS_MODE_OFF = nls.localize("tabFocusModeOffMsg", "Pressing Tab in the current editor will insert the tab character. Toggle this behavior by pressing {0}.");
+		const NLS_TAB_FOCUS_MODE_OFF_NO_KB = nls.localize("tabFocusModeOffMsgNoKb", "Pressing Tab in the current editor will insert the tab character. The command {0} is currently not triggerable by a keybinding.");
 
-		if (options.get(EditorOption.tabFocusMode)) {
-			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, AccessibilityHelpNLS.tabFocusModeOnMsg, AccessibilityHelpNLS.tabFocusModeOnMsgNoKb);
+		if (opts.tabFocusMode) {
+			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, NLS_TAB_FOCUS_MODE_ON, NLS_TAB_FOCUS_MODE_ON_NO_KB);
 		} else {
-			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, AccessibilityHelpNLS.tabFocusModeOffMsg, AccessibilityHelpNLS.tabFocusModeOffMsgNoKb);
+			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, NLS_TAB_FOCUS_MODE_OFF, NLS_TAB_FOCUS_MODE_OFF_NO_KB);
 		}
 
 		const openDocMessage = (
 			platform.isMacintosh
-				? AccessibilityHelpNLS.openDocMac
-				: AccessibilityHelpNLS.openDocWinLinux
+				? nls.localize("openDocMac", "Press Command+H now to open a browser window with more information related to editor accessibility.")
+				: nls.localize("openDocWinLinux", "Press Control+H now to open a browser window with more information related to editor accessibility.")
 		);
 
 		text += '\n\n - ' + openDocMessage;
 
-		text += '\n\n' + AccessibilityHelpNLS.outroMsg;
+		text += '\n\n' + nls.localize("outroMsg", "You can dismiss this tooltip and return to the editor by pressing Escape or Shift+Escape.");
 
 		this._contentDomNode.domNode.appendChild(renderFormattedText(text));
 		// Per https://www.w3.org/TR/wai-aria/roles#document, Authors SHOULD provide a title or label for documents
@@ -324,16 +336,13 @@ class ShowAccessibilityHelpAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.action.showAccessibilityHelp',
-			label: AccessibilityHelpNLS.showAccessibilityHelpAction,
+			label: nls.localize("ShowAccessibilityHelpAction", "Show Accessibility Help"),
 			alias: 'Show Accessibility Help',
-			precondition: undefined,
+			precondition: null,
 			kbOpts: {
-				primary: KeyMod.Alt | KeyCode.F1,
-				weight: KeybindingWeight.EditorContrib,
-				linux: {
-					primary: KeyMod.Alt | KeyMod.Shift | KeyCode.F1,
-					secondary: [KeyMod.Alt | KeyCode.F1]
-				}
+				kbExpr: EditorContextKeys.focus,
+				primary: (browser.isIE ? KeyMod.CtrlCmd | KeyCode.F1 : KeyMod.Alt | KeyCode.F1),
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -346,7 +355,7 @@ class ShowAccessibilityHelpAction extends EditorAction {
 	}
 }
 
-registerEditorContribution(AccessibilityHelpController.ID, AccessibilityHelpController);
+registerEditorContribution(AccessibilityHelpController);
 registerEditorAction(ShowAccessibilityHelpAction);
 
 const AccessibilityHelpCommand = EditorCommand.bindToContribution<AccessibilityHelpController>(AccessibilityHelpController.get);
@@ -370,11 +379,6 @@ registerThemingParticipant((theme, collector) => {
 	if (widgetBackground) {
 		collector.addRule(`.monaco-editor .accessibilityHelpWidget { background-color: ${widgetBackground}; }`);
 	}
-	const widgetForeground = theme.getColor(editorWidgetForeground);
-	if (widgetForeground) {
-		collector.addRule(`.monaco-editor .accessibilityHelpWidget { color: ${widgetForeground}; }`);
-	}
-
 
 	const widgetShadowColor = theme.getColor(widgetShadow);
 	if (widgetShadowColor) {

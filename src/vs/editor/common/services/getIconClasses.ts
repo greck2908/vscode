@@ -3,37 +3,38 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Schemas } from 'vs/base/common/network';
-import { DataUri, basenameOrAuthority } from 'vs/base/common/resources';
+'use strict';
+
 import { URI as uri } from 'vs/base/common/uri';
-import { PLAINTEXT_MODE_ID } from 'vs/editor/common/modes/modesRegistry';
 import { IModeService } from 'vs/editor/common/services/modeService';
 import { IModelService } from 'vs/editor/common/services/modelService';
+import { Schemas } from 'vs/base/common/network';
 import { FileKind } from 'vs/platform/files/common/files';
+import { basenameOrAuthority, DataUri } from 'vs/base/common/resources';
+import { PLAINTEXT_MODE_ID } from 'vs/editor/common/modes/modesRegistry';
 
-export function getIconClasses(modelService: IModelService, modeService: IModeService, resource: uri | undefined, fileKind?: FileKind): string[] {
-
+export function getIconClasses(modelService: IModelService, modeService: IModeService, resource: uri, fileKind?: FileKind): string[] {
 	// we always set these base classes even if we do not have a path
 	const classes = fileKind === FileKind.ROOT_FOLDER ? ['rootfolder-icon'] : fileKind === FileKind.FOLDER ? ['folder-icon'] : ['file-icon'];
 	if (resource) {
-
 		// Get the path and name of the resource. For data-URIs, we need to parse specially
-		let name: string | undefined;
+		let name: string;
+		let path: string;
 		if (resource.scheme === Schemas.data) {
 			const metadata = DataUri.parseMetaData(resource);
 			name = metadata.get(DataUri.META_DATA_LABEL);
-		} else {
-			name = cssEscape(basenameOrAuthority(resource).toLowerCase());
+			path = name;
 		}
-
+		else {
+			name = cssEscape(basenameOrAuthority(resource).toLowerCase());
+			path = resource.path.toLowerCase();
+		}
 		// Folders
 		if (fileKind === FileKind.FOLDER) {
 			classes.push(`${name}-name-folder-icon`);
 		}
-
 		// Files
 		else {
-
 			// Name & Extension(s)
 			if (name) {
 				classes.push(`${name}-name-file-icon`);
@@ -43,56 +44,32 @@ export function getIconClasses(modelService: IModelService, modeService: IModeSe
 				}
 				classes.push(`ext-file-icon`); // extra segment to increase file-ext score
 			}
-
-			// Detected Mode
-			const detectedModeId = detectModeId(modelService, modeService, resource);
-			if (detectedModeId) {
-				classes.push(`${cssEscape(detectedModeId)}-lang-file-icon`);
+			// Configured Language
+			let configuredLangId: string | null = getConfiguredLangId(modelService, resource);
+			configuredLangId = configuredLangId || modeService.getModeIdByFilepathOrFirstLine(path);
+			if (configuredLangId) {
+				classes.push(`${cssEscape(configuredLangId)}-lang-file-icon`);
 			}
 		}
 	}
 	return classes;
 }
 
-
-export function getIconClassesForModeId(modeId: string): string[] {
-	return ['file-icon', `${cssEscape(modeId)}-lang-file-icon`];
-}
-
-export function detectModeId(modelService: IModelService, modeService: IModeService, resource: uri): string | null {
-	if (!resource) {
-		return null; // we need a resource at least
-	}
-
-	let modeId: string | null = null;
-
-	// Data URI: check for encoded metadata
-	if (resource.scheme === Schemas.data) {
-		const metadata = DataUri.parseMetaData(resource);
-		const mime = metadata.get(DataUri.META_DATA_MIME);
-
-		if (mime) {
-			modeId = modeService.getModeId(mime);
-		}
-	}
-
-	// Any other URI: check for model if existing
-	else {
+export function getConfiguredLangId(modelService: IModelService, resource: uri): string | null {
+	let configuredLangId: string | null = null;
+	if (resource) {
 		const model = modelService.getModel(resource);
 		if (model) {
-			modeId = model.getModeId();
+			const modeId = model.getLanguageIdentifier().language;
+			if (modeId && modeId !== PLAINTEXT_MODE_ID) {
+				configuredLangId = modeId; // only take if the mode is specific (aka no just plain text)
+			}
 		}
 	}
 
-	// only take if the mode is specific (aka no just plain text)
-	if (modeId && modeId !== PLAINTEXT_MODE_ID) {
-		return modeId;
-	}
-
-	// otherwise fallback to path based detection
-	return modeService.getModeIdByFilepathOrFirstLine(resource);
+	return configuredLangId;
 }
 
-export function cssEscape(str: string): string {
-	return str.replace(/[\11\12\14\15\40]/g, '/'); // HTML class names can not contain certain whitespace characters, use / instead, which doesn't exist in file names.
+export function cssEscape(val: string): string {
+	return val.replace(/\s/g, '\\$&'); // make sure to not introduce CSS classes from files that contain whitespace
 }

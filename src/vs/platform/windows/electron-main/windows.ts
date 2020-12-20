@@ -3,38 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IWindowOpenable, IOpenEmptyWindowOptions, INativeWindowConfiguration } from 'vs/platform/windows/common/windows';
-import { NativeParsedArgs } from 'vs/platform/environment/common/argv';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { OpenContext, IWindowConfiguration, ReadyState, INativeOpenDialogOptions, IEnterWorkspaceResult, IMessageBoxResult, INewWindowOptions } from 'vs/platform/windows/common/windows';
+import { ParsedArgs } from 'vs/platform/environment/common/environment';
 import { Event } from 'vs/base/common/event';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { IProcessEnvironment } from 'vs/base/common/platform';
-import { IWorkspaceIdentifier } from 'vs/platform/workspaces/common/workspaces';
+import { IWorkspaceIdentifier, IWorkspaceFolderCreationData } from 'vs/platform/workspaces/common/workspaces';
 import { ISerializableCommandAction } from 'vs/platform/actions/common/actions';
 import { URI } from 'vs/base/common/uri';
-import { Rectangle, BrowserWindow, WebContents } from 'electron';
-import { IDisposable } from 'vs/base/common/lifecycle';
-import { CancellationToken } from 'vs/base/common/cancellation';
-
-export const enum OpenContext {
-
-	// opening when running from the command line
-	CLI,
-
-	// macOS only: opening from the dock (also when opening files to a running instance from desktop)
-	DOCK,
-
-	// opening from the main application window
-	MENU,
-
-	// opening from a file or folder dialog
-	DIALOG,
-
-	// opening from the OS's UI
-	DESKTOP,
-
-	// opening through the API
-	API
-}
 
 export interface IWindowState {
 	width?: number;
@@ -52,121 +29,115 @@ export const enum WindowMode {
 	Fullscreen
 }
 
-export interface ICodeWindow extends IDisposable {
+export interface ICodeWindow {
+	id: number;
+	win: Electron.BrowserWindow;
+	config: IWindowConfiguration;
 
-	readonly onLoad: Event<void>;
-	readonly onReady: Event<void>;
-	readonly onClose: Event<void>;
-	readonly onDestroy: Event<void>;
+	openedFolderUri: URI;
+	openedWorkspace: IWorkspaceIdentifier;
+	backupPath: string;
 
-	readonly whenClosedOrLoaded: Promise<void>;
+	isExtensionDevelopmentHost: boolean;
+	isExtensionTestHost: boolean;
 
-	readonly id: number;
-	readonly win: BrowserWindow;
-	readonly config: INativeWindowConfiguration | undefined;
+	lastFocusTime: number;
 
-	readonly openedFolderUri?: URI;
-	readonly openedWorkspace?: IWorkspaceIdentifier;
-	readonly backupPath?: string;
-
-	readonly remoteAuthority?: string;
-
-	readonly isExtensionDevelopmentHost: boolean;
-	readonly isExtensionTestHost: boolean;
-
-	readonly lastFocusTime: number;
-
-	readonly isReady: boolean;
-	ready(): Promise<ICodeWindow>;
-	setReady(): void;
-
-	readonly hasHiddenTitleBarStyle: boolean;
+	readyState: ReadyState;
+	ready(): TPromise<ICodeWindow>;
 
 	addTabbedWindow(window: ICodeWindow): void;
 
-	load(config: INativeWindowConfiguration, isReload?: boolean): void;
-	reload(cli?: NativeParsedArgs): void;
+	load(config: IWindowConfiguration, isReload?: boolean, disableExtensions?: boolean): void;
+	reload(configuration?: IWindowConfiguration, cli?: ParsedArgs): void;
 
-	focus(options?: { force: boolean }): void;
+	focus(): void;
 	close(): void;
 
-	getBounds(): Rectangle;
+	getBounds(): Electron.Rectangle;
 
 	send(channel: string, ...args: any[]): void;
-	sendWhenReady(channel: string, token: CancellationToken, ...args: any[]): void;
+	sendWhenReady(channel: string, ...args: any[]): void;
 
-	readonly isFullScreen: boolean;
 	toggleFullScreen(): void;
-
-	isMinimized(): boolean;
-
+	hasHiddenTitleBarStyle(): boolean;
 	setRepresentedFilename(name: string): void;
-	getRepresentedFilename(): string | undefined;
-
-	setDocumentEdited(edited: boolean): void;
-	isDocumentEdited(): boolean;
-
-	handleTitleDoubleClick(): void;
+	getRepresentedFilename(): string;
+	onWindowTitleDoubleClick(): void;
 
 	updateTouchBar(items: ISerializableCommandAction[][]): void;
 
+	setReady(): void;
 	serializeWindowState(): IWindowState;
+
+	dispose(): void;
 }
 
 export const IWindowsMainService = createDecorator<IWindowsMainService>('windowsMainService');
 
 export interface IWindowsCountChangedEvent {
-	readonly oldCount: number;
-	readonly newCount: number;
+	oldCount: number;
+	newCount: number;
 }
 
 export interface IWindowsMainService {
+	_serviceBrand: any;
 
-	readonly _serviceBrand: undefined;
+	// events
+	onWindowReady: Event<ICodeWindow>;
+	onActiveWindowChanged: Event<ICodeWindow>;
+	onWindowsCountChanged: Event<IWindowsCountChangedEvent>;
+	onWindowClose: Event<number>;
+	onWindowReload: Event<number>;
 
-	readonly onWindowsCountChanged: Event<IWindowsCountChangedEvent>;
-
-	readonly onWindowOpened: Event<ICodeWindow>;
-	readonly onWindowReady: Event<ICodeWindow>;
-	readonly onWindowDestroyed: Event<ICodeWindow>;
-
+	// methods
+	ready(initialUserEnv: IProcessEnvironment): void;
+	reload(win: ICodeWindow, cli?: ParsedArgs): void;
+	enterWorkspace(win: ICodeWindow, path: string): TPromise<IEnterWorkspaceResult>;
+	createAndEnterWorkspace(win: ICodeWindow, folders?: IWorkspaceFolderCreationData[], path?: string): TPromise<IEnterWorkspaceResult>;
+	saveAndEnterWorkspace(win: ICodeWindow, path: string): TPromise<IEnterWorkspaceResult>;
+	closeWorkspace(win: ICodeWindow): void;
 	open(openConfig: IOpenConfiguration): ICodeWindow[];
-	openEmptyWindow(openConfig: IOpenEmptyConfiguration, options?: IOpenEmptyWindowOptions): ICodeWindow[];
-	openExtensionDevelopmentHostWindow(extensionDevelopmentPath: string[], openConfig: IOpenConfiguration): ICodeWindow[];
-
+	openExtensionDevelopmentHostWindow(openConfig: IOpenConfiguration): void;
+	pickFileFolderAndOpen(options: INativeOpenDialogOptions): void;
+	pickFolderAndOpen(options: INativeOpenDialogOptions): void;
+	pickFileAndOpen(options: INativeOpenDialogOptions): void;
+	pickWorkspaceAndOpen(options: INativeOpenDialogOptions): void;
+	showMessageBox(options: Electron.MessageBoxOptions, win?: ICodeWindow): TPromise<IMessageBoxResult>;
+	showSaveDialog(options: Electron.SaveDialogOptions, win?: ICodeWindow): TPromise<string>;
+	showOpenDialog(options: Electron.OpenDialogOptions, win?: ICodeWindow): TPromise<string[]>;
+	focusLastActive(cli: ParsedArgs, context: OpenContext): ICodeWindow;
+	getLastActiveWindow(): ICodeWindow;
+	waitForWindowCloseOrLoad(windowId: number): TPromise<void>;
+	openNewWindow(context: OpenContext, options?: INewWindowOptions): ICodeWindow[];
+	openNewTabbedWindow(context: OpenContext): ICodeWindow[];
 	sendToFocused(channel: string, ...args: any[]): void;
-	sendToAll(channel: string, payload?: any, windowIdsToIgnore?: number[]): void;
-
+	sendToAll(channel: string, payload: any, windowIdsToIgnore?: number[]): void;
+	getFocusedWindow(): ICodeWindow;
+	getWindowById(windowId: number): ICodeWindow;
 	getWindows(): ICodeWindow[];
 	getWindowCount(): number;
-
-	getFocusedWindow(): ICodeWindow | undefined;
-	getLastActiveWindow(): ICodeWindow | undefined;
-
-	getWindowById(windowId: number): ICodeWindow | undefined;
-	getWindowByWebContents(webContents: WebContents): ICodeWindow | undefined;
+	quit(): void;
 }
 
-export interface IBaseOpenConfiguration {
-	readonly context: OpenContext;
-	readonly contextWindowId?: number;
-}
-
-export interface IOpenConfiguration extends IBaseOpenConfiguration {
-	readonly cli: NativeParsedArgs;
-	readonly userEnv?: IProcessEnvironment;
-	readonly urisToOpen?: IWindowOpenable[];
-	readonly waitMarkerFileURI?: URI;
-	readonly preferNewWindow?: boolean;
-	readonly forceNewWindow?: boolean;
-	readonly forceNewTabbedWindow?: boolean;
-	readonly forceReuseWindow?: boolean;
-	readonly forceEmpty?: boolean;
-	readonly diffMode?: boolean;
+export interface IOpenConfiguration {
+	context: OpenContext;
+	contextWindowId?: number;
+	cli: ParsedArgs;
+	userEnv?: IProcessEnvironment;
+	urisToOpen?: URI[];
+	preferNewWindow?: boolean;
+	forceNewWindow?: boolean;
+	forceNewTabbedWindow?: boolean;
+	forceReuseWindow?: boolean;
+	forceEmpty?: boolean;
+	diffMode?: boolean;
 	addMode?: boolean;
-	readonly gotoLineMode?: boolean;
-	readonly initialStartup?: boolean;
-	readonly noRecentEntry?: boolean;
+	forceOpenWorkspaceAsFile?: boolean;
+	initialStartup?: boolean;
 }
 
-export interface IOpenEmptyConfiguration extends IBaseOpenConfiguration { }
+export interface ISharedProcess {
+	whenReady(): TPromise<void>;
+	toggle(): void;
+}

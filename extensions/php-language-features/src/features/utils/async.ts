@@ -44,10 +44,10 @@ export class Throttler<T> {
 			this.queuedPromiseFactory = promiseFactory;
 
 			if (!this.queuedPromise) {
-				let onComplete = () => {
+				var onComplete = () => {
 					this.queuedPromise = null;
 
-					let result = this.queue(this.queuedPromiseFactory!);
+					var result = this.queue(this.queuedPromiseFactory!);
 					this.queuedPromiseFactory = null;
 
 					return result;
@@ -105,7 +105,7 @@ export class Delayer<T> {
 	public defaultDelay: number;
 	private timeout: NodeJS.Timer | null;
 	private completionPromise: Promise<T> | null;
-	private onResolve: ((value: T | PromiseLike<T> | undefined) => void) | null;
+	private onResolve: ((value: T | Thenable<T> | undefined) => void) | null;
 	private task: ITask<T> | null;
 
 	constructor(defaultDelay: number) {
@@ -121,13 +121,13 @@ export class Delayer<T> {
 		this.cancelTimeout();
 
 		if (!this.completionPromise) {
-			this.completionPromise = new Promise<T | undefined>((resolve) => {
+			this.completionPromise = new Promise<T>((resolve) => {
 				this.onResolve = resolve;
 			}).then(() => {
 				this.completionPromise = null;
 				this.onResolve = null;
 
-				let result = this.task!();
+				var result = this.task!();
 				this.task = null;
 
 				return result;

@@ -21,10 +21,6 @@ export interface Modifiers {
 	readonly metaKey: boolean;
 }
 
-export interface KeyLabelProvider<T extends Modifiers> {
-	(keybinding: T): string | null;
-}
-
 export class ModifierLabelProvider {
 
 	public readonly modifierLabels: ModifierLabels[];
@@ -36,22 +32,11 @@ export class ModifierLabelProvider {
 		this.modifierLabels[OperatingSystem.Linux] = linux;
 	}
 
-	public toLabel<T extends Modifiers>(OS: OperatingSystem, parts: T[], keyLabelProvider: KeyLabelProvider<T>): string | null {
-		if (parts.length === 0) {
+	public toLabel(firstPartMod: Modifiers | null, firstPartKey: string | null, chordPartMod: Modifiers | null, chordPartKey: string | null, OS: OperatingSystem): string | null {
+		if (firstPartMod === null || firstPartKey === null) {
 			return null;
 		}
-
-		const result: string[] = [];
-		for (let i = 0, len = parts.length; i < len; i++) {
-			const part = parts[i];
-			const keyLabel = keyLabelProvider(part);
-			if (keyLabel === null) {
-				// this keybinding cannot be expressed...
-				return null;
-			}
-			result[i] = _simpleAsString(part, keyLabel, this.modifierLabels[OS]);
-		}
-		return result.join(' ');
+		return _asString(firstPartMod, firstPartKey, chordPartMod, chordPartKey, this.modifierLabels[OS]);
 	}
 }
 
@@ -162,7 +147,7 @@ function _simpleAsString(modifiers: Modifiers, key: string, labels: ModifierLabe
 		return '';
 	}
 
-	const result: string[] = [];
+	let result: string[] = [];
 
 	// translate modifier keys: Ctrl-Shift-Alt-Meta
 	if (modifiers.ctrlKey) {
@@ -182,9 +167,18 @@ function _simpleAsString(modifiers: Modifiers, key: string, labels: ModifierLabe
 	}
 
 	// the actual key
-	if (key !== '') {
-		result.push(key);
-	}
+	result.push(key);
 
 	return result.join(labels.separator);
+}
+
+function _asString(firstPartMod: Modifiers, firstPartKey: string, chordPartMod: Modifiers | null, chordPartKey: string | null, labels: ModifierLabels): string {
+	let result = _simpleAsString(firstPartMod, firstPartKey, labels);
+
+	if (chordPartMod !== null && chordPartKey !== null) {
+		result += ' ';
+		result += _simpleAsString(chordPartMod, chordPartKey, labels);
+	}
+
+	return result;
 }

@@ -3,38 +3,35 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Emitter, Event } from 'vs/base/common/event';
-import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
-import { AbstractCodeEditorService } from 'vs/editor/browser/services/abstractCodeEditorService';
-import { IDecorationRenderOptions } from 'vs/editor/common/editorCommon';
 import { IModelDecorationOptions } from 'vs/editor/common/model';
-import { CommandsRegistry, ICommandEvent, ICommandService } from 'vs/platform/commands/common/commands';
-import { IResourceEditorInput } from 'vs/platform/editor/common/editor';
+import { IDecorationRenderOptions } from 'vs/editor/common/editorCommon';
+import { AbstractCodeEditorService } from 'vs/editor/browser/services/abstractCodeEditorService';
+import { ICommandService, ICommandEvent, CommandsRegistry } from 'vs/platform/commands/common/commands';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { Emitter, Event } from 'vs/base/common/event';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
+import { IResourceInput } from 'vs/platform/editor/common/editor';
 
 export class TestCodeEditorService extends AbstractCodeEditorService {
-	public lastInput?: IResourceEditorInput;
+	public lastInput: IResourceInput;
 	public getActiveCodeEditor(): ICodeEditor | null { return null; }
-	public openCodeEditor(input: IResourceEditorInput, source: ICodeEditor | null, sideBySide?: boolean): Promise<ICodeEditor | null> {
+	public openCodeEditor(input: IResourceInput, source: ICodeEditor | null, sideBySide?: boolean): TPromise<ICodeEditor | null> {
 		this.lastInput = input;
-		return Promise.resolve(null);
+		return TPromise.as(null);
 	}
 	public registerDecorationType(key: string, options: IDecorationRenderOptions, parentTypeKey?: string): void { }
 	public removeDecorationType(key: string): void { }
 	public resolveDecorationOptions(decorationTypeKey: string, writable: boolean): IModelDecorationOptions { return {}; }
-	public resolveDecorationCSSRules(decorationTypeKey: string): CSSRuleList | null { return null; }
 }
 
 export class TestCommandService implements ICommandService {
-	declare readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private readonly _instantiationService: IInstantiationService;
 
-	private readonly _onWillExecuteCommand = new Emitter<ICommandEvent>();
+	private readonly _onWillExecuteCommand: Emitter<ICommandEvent> = new Emitter<ICommandEvent>();
 	public readonly onWillExecuteCommand: Event<ICommandEvent> = this._onWillExecuteCommand.event;
-
-	private readonly _onDidExecuteCommand = new Emitter<ICommandEvent>();
-	public readonly onDidExecuteCommand: Event<ICommandEvent> = this._onDidExecuteCommand.event;
 
 	constructor(instantiationService: IInstantiationService) {
 		this._instantiationService = instantiationService;
@@ -47,9 +44,8 @@ export class TestCommandService implements ICommandService {
 		}
 
 		try {
-			this._onWillExecuteCommand.fire({ commandId: id, args });
-			const result = this._instantiationService.invokeFunction.apply(this._instantiationService, [command.handler, ...args]) as T;
-			this._onDidExecuteCommand.fire({ commandId: id, args });
+			this._onWillExecuteCommand.fire({ commandId: id });
+			const result = this._instantiationService.invokeFunction.apply(this._instantiationService, [command.handler].concat(args));
 			return Promise.resolve(result);
 		} catch (err) {
 			return Promise.reject(err);

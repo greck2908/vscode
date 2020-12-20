@@ -23,9 +23,6 @@ export interface IFindInputOptions extends IFindInputStyles {
 	readonly width?: number;
 	readonly validation?: IInputValidator;
 	readonly label: string;
-	readonly flexibleHeight?: boolean;
-	readonly flexibleWidth?: boolean;
-	readonly flexibleMaxHeight?: number;
 
 	readonly appendCaseSensitiveLabel?: string;
 	readonly appendWholeWordsLabel?: string;
@@ -35,8 +32,6 @@ export interface IFindInputOptions extends IFindInputStyles {
 
 export interface IFindInputStyles extends IInputBoxStyles {
 	inputActiveOptionBorder?: Color;
-	inputActiveOptionForeground?: Color;
-	inputActiveOptionBackground?: Color;
 }
 
 const NLS_DEFAULT_LABEL = nls.localize('defaultLabel', "input");
@@ -46,27 +41,26 @@ export class FindInput extends Widget {
 	static readonly OPTION_CHANGE: string = 'optionChange';
 
 	private contextViewProvider: IContextViewProvider;
+	private width: number;
 	private placeholder: string;
-	private validation?: IInputValidator;
+	private validation: IInputValidator;
 	private label: string;
 	private fixFocusOnOptionClickEnabled = true;
 
-	private inputActiveOptionBorder?: Color;
-	private inputActiveOptionForeground?: Color;
-	private inputActiveOptionBackground?: Color;
-	private inputBackground?: Color;
-	private inputForeground?: Color;
-	private inputBorder?: Color;
+	private inputActiveOptionBorder: Color;
+	private inputBackground: Color;
+	private inputForeground: Color;
+	private inputBorder: Color;
 
-	private inputValidationInfoBorder?: Color;
-	private inputValidationInfoBackground?: Color;
-	private inputValidationInfoForeground?: Color;
-	private inputValidationWarningBorder?: Color;
-	private inputValidationWarningBackground?: Color;
-	private inputValidationWarningForeground?: Color;
-	private inputValidationErrorBorder?: Color;
-	private inputValidationErrorBackground?: Color;
-	private inputValidationErrorForeground?: Color;
+	private inputValidationInfoBorder: Color;
+	private inputValidationInfoBackground: Color;
+	private inputValidationInfoForeground: Color;
+	private inputValidationWarningBorder: Color;
+	private inputValidationWarningBackground: Color;
+	private inputValidationWarningForeground: Color;
+	private inputValidationErrorBorder: Color;
+	private inputValidationErrorBackground: Color;
+	private inputValidationErrorForeground: Color;
 
 	private regex: RegexCheckbox;
 	private wholeWords: WholeWordsCheckbox;
@@ -95,16 +89,15 @@ export class FindInput extends Widget {
 	private _onRegexKeyDown = this._register(new Emitter<IKeyboardEvent>());
 	public readonly onRegexKeyDown: Event<IKeyboardEvent> = this._onRegexKeyDown.event;
 
-	constructor(parent: HTMLElement | null, contextViewProvider: IContextViewProvider, private readonly _showOptionButtons: boolean, options: IFindInputOptions) {
+	constructor(parent: HTMLElement, contextViewProvider: IContextViewProvider, private readonly _showOptionButtons: boolean, options?: IFindInputOptions) {
 		super();
 		this.contextViewProvider = contextViewProvider;
+		this.width = options.width || 100;
 		this.placeholder = options.placeholder || '';
 		this.validation = options.validation;
 		this.label = options.label || NLS_DEFAULT_LABEL;
 
 		this.inputActiveOptionBorder = options.inputActiveOptionBorder;
-		this.inputActiveOptionForeground = options.inputActiveOptionForeground;
-		this.inputActiveOptionBackground = options.inputActiveOptionBackground;
 		this.inputBackground = options.inputBackground;
 		this.inputForeground = options.inputForeground;
 		this.inputBorder = options.inputBorder;
@@ -119,136 +112,15 @@ export class FindInput extends Widget {
 		this.inputValidationErrorBackground = options.inputValidationErrorBackground;
 		this.inputValidationErrorForeground = options.inputValidationErrorForeground;
 
-		const appendCaseSensitiveLabel = options.appendCaseSensitiveLabel || '';
-		const appendWholeWordsLabel = options.appendWholeWordsLabel || '';
-		const appendRegexLabel = options.appendRegexLabel || '';
-		const history = options.history || [];
-		const flexibleHeight = !!options.flexibleHeight;
-		const flexibleWidth = !!options.flexibleWidth;
-		const flexibleMaxHeight = options.flexibleMaxHeight;
+		this.regex = null;
+		this.wholeWords = null;
+		this.caseSensitive = null;
+		this.domNode = null;
+		this.inputBox = null;
 
-		this.domNode = document.createElement('div');
-		this.domNode.classList.add('monaco-findInput');
+		this.buildDomNode(options.appendCaseSensitiveLabel || '', options.appendWholeWordsLabel || '', options.appendRegexLabel || '', options.history);
 
-		this.inputBox = this._register(new HistoryInputBox(this.domNode, this.contextViewProvider, {
-			placeholder: this.placeholder || '',
-			ariaLabel: this.label || '',
-			validationOptions: {
-				validation: this.validation
-			},
-			inputBackground: this.inputBackground,
-			inputForeground: this.inputForeground,
-			inputBorder: this.inputBorder,
-			inputValidationInfoBackground: this.inputValidationInfoBackground,
-			inputValidationInfoForeground: this.inputValidationInfoForeground,
-			inputValidationInfoBorder: this.inputValidationInfoBorder,
-			inputValidationWarningBackground: this.inputValidationWarningBackground,
-			inputValidationWarningForeground: this.inputValidationWarningForeground,
-			inputValidationWarningBorder: this.inputValidationWarningBorder,
-			inputValidationErrorBackground: this.inputValidationErrorBackground,
-			inputValidationErrorForeground: this.inputValidationErrorForeground,
-			inputValidationErrorBorder: this.inputValidationErrorBorder,
-			history,
-			flexibleHeight,
-			flexibleWidth,
-			flexibleMaxHeight
-		}));
-
-		this.regex = this._register(new RegexCheckbox({
-			appendTitle: appendRegexLabel,
-			isChecked: false,
-			inputActiveOptionBorder: this.inputActiveOptionBorder,
-			inputActiveOptionForeground: this.inputActiveOptionForeground,
-			inputActiveOptionBackground: this.inputActiveOptionBackground
-		}));
-		this._register(this.regex.onChange(viaKeyboard => {
-			this._onDidOptionChange.fire(viaKeyboard);
-			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
-				this.inputBox.focus();
-			}
-			this.validate();
-		}));
-		this._register(this.regex.onKeyDown(e => {
-			this._onRegexKeyDown.fire(e);
-		}));
-
-		this.wholeWords = this._register(new WholeWordsCheckbox({
-			appendTitle: appendWholeWordsLabel,
-			isChecked: false,
-			inputActiveOptionBorder: this.inputActiveOptionBorder,
-			inputActiveOptionForeground: this.inputActiveOptionForeground,
-			inputActiveOptionBackground: this.inputActiveOptionBackground
-		}));
-		this._register(this.wholeWords.onChange(viaKeyboard => {
-			this._onDidOptionChange.fire(viaKeyboard);
-			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
-				this.inputBox.focus();
-			}
-			this.validate();
-		}));
-
-		this.caseSensitive = this._register(new CaseSensitiveCheckbox({
-			appendTitle: appendCaseSensitiveLabel,
-			isChecked: false,
-			inputActiveOptionBorder: this.inputActiveOptionBorder,
-			inputActiveOptionForeground: this.inputActiveOptionForeground,
-			inputActiveOptionBackground: this.inputActiveOptionBackground
-		}));
-		this._register(this.caseSensitive.onChange(viaKeyboard => {
-			this._onDidOptionChange.fire(viaKeyboard);
-			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
-				this.inputBox.focus();
-			}
-			this.validate();
-		}));
-		this._register(this.caseSensitive.onKeyDown(e => {
-			this._onCaseSensitiveKeyDown.fire(e);
-		}));
-
-		if (this._showOptionButtons) {
-			this.inputBox.paddingRight = this.caseSensitive.width() + this.wholeWords.width() + this.regex.width();
-		}
-
-		// Arrow-Key support to navigate between options
-		let indexes = [this.caseSensitive.domNode, this.wholeWords.domNode, this.regex.domNode];
-		this.onkeydown(this.domNode, (event: IKeyboardEvent) => {
-			if (event.equals(KeyCode.LeftArrow) || event.equals(KeyCode.RightArrow) || event.equals(KeyCode.Escape)) {
-				let index = indexes.indexOf(<HTMLElement>document.activeElement);
-				if (index >= 0) {
-					let newIndex: number = -1;
-					if (event.equals(KeyCode.RightArrow)) {
-						newIndex = (index + 1) % indexes.length;
-					} else if (event.equals(KeyCode.LeftArrow)) {
-						if (index === 0) {
-							newIndex = indexes.length - 1;
-						} else {
-							newIndex = index - 1;
-						}
-					}
-
-					if (event.equals(KeyCode.Escape)) {
-						indexes[index].blur();
-						this.inputBox.focus();
-					} else if (newIndex >= 0) {
-						indexes[newIndex].focus();
-					}
-
-					dom.EventHelper.stop(event, true);
-				}
-			}
-		});
-
-
-		let controls = document.createElement('div');
-		controls.className = 'controls';
-		controls.style.display = this._showOptionButtons ? 'block' : 'none';
-		controls.appendChild(this.caseSensitive.domNode);
-		controls.appendChild(this.wholeWords.domNode);
-		controls.appendChild(this.regex.domNode);
-
-		this.domNode.appendChild(controls);
-
-		if (parent) {
+		if (Boolean(parent)) {
 			parent.appendChild(this.domNode);
 		}
 
@@ -259,7 +131,7 @@ export class FindInput extends Widget {
 	}
 
 	public enable(): void {
-		this.domNode.classList.remove('disabled');
+		dom.removeClass(this.domNode, 'disabled');
 		this.inputBox.enable();
 		this.regex.enable();
 		this.wholeWords.enable();
@@ -267,7 +139,7 @@ export class FindInput extends Widget {
 	}
 
 	public disable(): void {
-		this.domNode.classList.add('disabled');
+		dom.addClass(this.domNode, 'disabled');
 		this.inputBox.disable();
 		this.regex.disable();
 		this.wholeWords.disable();
@@ -292,6 +164,13 @@ export class FindInput extends Widget {
 		this.focus();
 	}
 
+	public setWidth(newWidth: number): void {
+		this.width = newWidth;
+		this.domNode.style.width = this.width + 'px';
+		this.contextViewProvider.layout();
+		this.setInputWidth();
+	}
+
 	public getValue(): string {
 		return this.inputBox.value;
 	}
@@ -302,14 +181,8 @@ export class FindInput extends Widget {
 		}
 	}
 
-	public onSearchSubmit(): void {
-		this.inputBox.addToHistory();
-	}
-
 	public style(styles: IFindInputStyles): void {
 		this.inputActiveOptionBorder = styles.inputActiveOptionBorder;
-		this.inputActiveOptionForeground = styles.inputActiveOptionForeground;
-		this.inputActiveOptionBackground = styles.inputActiveOptionBackground;
 		this.inputBackground = styles.inputBackground;
 		this.inputForeground = styles.inputForeground;
 		this.inputBorder = styles.inputBorder;
@@ -331,8 +204,6 @@ export class FindInput extends Widget {
 		if (this.domNode) {
 			const checkBoxStyles: ICheckboxStyles = {
 				inputActiveOptionBorder: this.inputActiveOptionBorder,
-				inputActiveOptionForeground: this.inputActiveOptionForeground,
-				inputActiveOptionBackground: this.inputActiveOptionBackground,
 			};
 			this.regex.style(checkBoxStyles);
 			this.wholeWords.style(checkBoxStyles);
@@ -370,6 +241,7 @@ export class FindInput extends Widget {
 
 	public setCaseSensitive(value: boolean): void {
 		this.caseSensitive.checked = value;
+		this.setInputWidth();
 	}
 
 	public getWholeWords(): boolean {
@@ -378,6 +250,7 @@ export class FindInput extends Widget {
 
 	public setWholeWords(value: boolean): void {
 		this.wholeWords.checked = value;
+		this.setInputWidth();
 	}
 
 	public getRegex(): boolean {
@@ -386,6 +259,7 @@ export class FindInput extends Widget {
 
 	public setRegex(value: boolean): void {
 		this.regex.checked = value;
+		this.setInputWidth();
 		this.validate();
 	}
 
@@ -399,9 +273,128 @@ export class FindInput extends Widget {
 
 	private _lastHighlightFindOptions: number = 0;
 	public highlightFindOptions(): void {
-		this.domNode.classList.remove('highlight-' + (this._lastHighlightFindOptions));
+		dom.removeClass(this.domNode, 'highlight-' + (this._lastHighlightFindOptions));
 		this._lastHighlightFindOptions = 1 - this._lastHighlightFindOptions;
-		this.domNode.classList.add('highlight-' + (this._lastHighlightFindOptions));
+		dom.addClass(this.domNode, 'highlight-' + (this._lastHighlightFindOptions));
+	}
+
+	private setInputWidth(): void {
+		let w = this.width - this.caseSensitive.width() - this.wholeWords.width() - this.regex.width();
+		this.inputBox.width = w;
+	}
+
+	private buildDomNode(appendCaseSensitiveLabel: string, appendWholeWordsLabel: string, appendRegexLabel: string, history: string[]): void {
+		this.domNode = document.createElement('div');
+		this.domNode.style.width = this.width + 'px';
+		dom.addClass(this.domNode, 'monaco-findInput');
+
+		this.inputBox = this._register(new HistoryInputBox(this.domNode, this.contextViewProvider, {
+			placeholder: this.placeholder || '',
+			ariaLabel: this.label || '',
+			validationOptions: {
+				validation: this.validation || null
+			},
+			inputBackground: this.inputBackground,
+			inputForeground: this.inputForeground,
+			inputBorder: this.inputBorder,
+			inputValidationInfoBackground: this.inputValidationInfoBackground,
+			inputValidationInfoForeground: this.inputValidationInfoForeground,
+			inputValidationInfoBorder: this.inputValidationInfoBorder,
+			inputValidationWarningBackground: this.inputValidationWarningBackground,
+			inputValidationWarningForeground: this.inputValidationWarningForeground,
+			inputValidationWarningBorder: this.inputValidationWarningBorder,
+			inputValidationErrorBackground: this.inputValidationErrorBackground,
+			inputValidationErrorForeground: this.inputValidationErrorForeground,
+			inputValidationErrorBorder: this.inputValidationErrorBorder,
+			history
+		}));
+
+		this.regex = this._register(new RegexCheckbox({
+			appendTitle: appendRegexLabel,
+			isChecked: false,
+			inputActiveOptionBorder: this.inputActiveOptionBorder
+		}));
+		this._register(this.regex.onChange(viaKeyboard => {
+			this._onDidOptionChange.fire(viaKeyboard);
+			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
+				this.inputBox.focus();
+			}
+			this.setInputWidth();
+			this.validate();
+		}));
+		this._register(this.regex.onKeyDown(e => {
+			this._onRegexKeyDown.fire(e);
+		}));
+
+		this.wholeWords = this._register(new WholeWordsCheckbox({
+			appendTitle: appendWholeWordsLabel,
+			isChecked: false,
+			inputActiveOptionBorder: this.inputActiveOptionBorder
+		}));
+		this._register(this.wholeWords.onChange(viaKeyboard => {
+			this._onDidOptionChange.fire(viaKeyboard);
+			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
+				this.inputBox.focus();
+			}
+			this.setInputWidth();
+			this.validate();
+		}));
+
+		this.caseSensitive = this._register(new CaseSensitiveCheckbox({
+			appendTitle: appendCaseSensitiveLabel,
+			isChecked: false,
+			inputActiveOptionBorder: this.inputActiveOptionBorder
+		}));
+		this._register(this.caseSensitive.onChange(viaKeyboard => {
+			this._onDidOptionChange.fire(viaKeyboard);
+			if (!viaKeyboard && this.fixFocusOnOptionClickEnabled) {
+				this.inputBox.focus();
+			}
+			this.setInputWidth();
+			this.validate();
+		}));
+		this._register(this.caseSensitive.onKeyDown(e => {
+			this._onCaseSensitiveKeyDown.fire(e);
+		}));
+
+		// Arrow-Key support to navigate between options
+		let indexes = [this.caseSensitive.domNode, this.wholeWords.domNode, this.regex.domNode];
+		this.onkeydown(this.domNode, (event: IKeyboardEvent) => {
+			if (event.equals(KeyCode.LeftArrow) || event.equals(KeyCode.RightArrow) || event.equals(KeyCode.Escape)) {
+				let index = indexes.indexOf(<HTMLElement>document.activeElement);
+				if (index >= 0) {
+					let newIndex: number;
+					if (event.equals(KeyCode.RightArrow)) {
+						newIndex = (index + 1) % indexes.length;
+					} else if (event.equals(KeyCode.LeftArrow)) {
+						if (index === 0) {
+							newIndex = indexes.length - 1;
+						} else {
+							newIndex = index - 1;
+						}
+					}
+
+					if (event.equals(KeyCode.Escape)) {
+						indexes[index].blur();
+					} else if (newIndex >= 0) {
+						indexes[newIndex].focus();
+					}
+
+					dom.EventHelper.stop(event, true);
+				}
+			}
+		});
+
+		this.setInputWidth();
+
+		let controls = document.createElement('div');
+		controls.className = 'controls';
+		controls.style.display = this._showOptionButtons ? 'block' : 'none';
+		controls.appendChild(this.caseSensitive.domNode);
+		controls.appendChild(this.wholeWords.domNode);
+		controls.appendChild(this.regex.domNode);
+
+		this.domNode.appendChild(controls);
 	}
 
 	public validate(): void {
@@ -418,5 +411,9 @@ export class FindInput extends Widget {
 
 	private clearValidation(): void {
 		this.inputBox.hideMessage();
+	}
+
+	public dispose(): void {
+		super.dispose();
 	}
 }

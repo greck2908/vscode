@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Range } from 'vs/editor/common/core/range';
 import { Selection } from 'vs/editor/common/core/selection';
-import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from 'vs/editor/common/editorCommon';
+import * as editorCommon from 'vs/editor/common/editorCommon';
+import { Range } from 'vs/editor/common/core/range';
 import { ITextModel } from 'vs/editor/common/model';
 
-export class ReplaceCommand implements ICommand {
+export class ReplaceCommand implements editorCommon.ICommand {
 
 	private readonly _range: Range;
 	private readonly _text: string;
@@ -20,11 +20,11 @@ export class ReplaceCommand implements ICommand {
 		this.insertsAutoWhitespace = insertsAutoWhitespace;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this._range, this._text);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
 		let inverseEditOperations = helper.getInverseEditOperations();
 		let srcRange = inverseEditOperations[0].range;
 		return new Selection(
@@ -36,28 +36,7 @@ export class ReplaceCommand implements ICommand {
 	}
 }
 
-export class ReplaceCommandThatSelectsText implements ICommand {
-
-	private readonly _range: Range;
-	private readonly _text: string;
-
-	constructor(range: Range, text: string) {
-		this._range = range;
-		this._text = text;
-	}
-
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
-		builder.addTrackedEditOperation(this._range, this._text);
-	}
-
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		const inverseEditOperations = helper.getInverseEditOperations();
-		const srcRange = inverseEditOperations[0].range;
-		return new Selection(srcRange.startLineNumber, srcRange.startColumn, srcRange.endLineNumber, srcRange.endColumn);
-	}
-}
-
-export class ReplaceCommandWithoutChangingPosition implements ICommand {
+export class ReplaceCommandWithoutChangingPosition implements editorCommon.ICommand {
 
 	private readonly _range: Range;
 	private readonly _text: string;
@@ -69,11 +48,11 @@ export class ReplaceCommandWithoutChangingPosition implements ICommand {
 		this.insertsAutoWhitespace = insertsAutoWhitespace;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this._range, this._text);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
 		let inverseEditOperations = helper.getInverseEditOperations();
 		let srcRange = inverseEditOperations[0].range;
 		return new Selection(
@@ -85,7 +64,7 @@ export class ReplaceCommandWithoutChangingPosition implements ICommand {
 	}
 }
 
-export class ReplaceCommandWithOffsetCursorState implements ICommand {
+export class ReplaceCommandWithOffsetCursorState implements editorCommon.ICommand {
 
 	private readonly _range: Range;
 	private readonly _text: string;
@@ -101,11 +80,11 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 		this.insertsAutoWhitespace = insertsAutoWhitespace;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this._range, this._text);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
 		let inverseEditOperations = helper.getInverseEditOperations();
 		let srcRange = inverseEditOperations[0].range;
 		return new Selection(
@@ -117,28 +96,25 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 	}
 }
 
-export class ReplaceCommandThatPreservesSelection implements ICommand {
+export class ReplaceCommandThatPreservesSelection implements editorCommon.ICommand {
 
-	private readonly _range: Range;
-	private readonly _text: string;
-	private readonly _initialSelection: Selection;
-	private readonly _forceMoveMarkers: boolean;
-	private _selectionId: string | null;
+	private _range: Range;
+	private _text: string;
+	private _initialSelection: Selection;
+	private _selectionId: string;
 
-	constructor(editRange: Range, text: string, initialSelection: Selection, forceMoveMarkers: boolean = false) {
+	constructor(editRange: Range, text: string, initialSelection: Selection) {
 		this._range = editRange;
 		this._text = text;
 		this._initialSelection = initialSelection;
-		this._forceMoveMarkers = forceMoveMarkers;
-		this._selectionId = null;
 	}
 
-	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
-		builder.addTrackedEditOperation(this._range, this._text, this._forceMoveMarkers);
+	public getEditOperations(model: ITextModel, builder: editorCommon.IEditOperationBuilder): void {
+		builder.addEditOperation(this._range, this._text);
 		this._selectionId = builder.trackSelection(this._initialSelection);
 	}
 
-	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this._selectionId!);
+	public computeCursorState(model: ITextModel, helper: editorCommon.ICursorStateComputerData): Selection {
+		return helper.getTrackedSelection(this._selectionId);
 	}
 }

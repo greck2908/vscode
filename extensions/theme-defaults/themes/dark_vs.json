@@ -44,10 +44,7 @@
 		},
 		{
 			"scope": [
-				"constant.numeric",
-				"variable.other.enummember",
-				"keyword.operator.plus.exponent",
-				"keyword.operator.minus.exponent"
+				"constant.numeric"
 			],
 			"settings": {
 				"foreground": "#b5cea8"
@@ -86,6 +83,7 @@
 				"entity.other.attribute-name.pseudo-class.css",
 				"entity.other.attribute-name.pseudo-element.css",
 				"source.css.less entity.other.attribute-name.id",
+				"entity.other.attribute-name.attribute.scss",
 				"entity.other.attribute-name.scss"
 			],
 			"settings": {
@@ -168,10 +166,7 @@
 			}
 		},
 		{
-			"scope": [
-				"meta.preprocessor",
-				"entity.name.function.preprocessor"
-			],
+			"scope": "meta.preprocessor",
 			"settings": {
 				"foreground": "#569cd6"
 			}
@@ -213,19 +208,13 @@
 			}
 		},
 		{
-			"scope": [
-				"storage.modifier",
-				"keyword.operator.noexcept"
-			],
+			"scope": "storage.modifier",
 			"settings": {
 				"foreground": "#569cd6"
 			}
 		},
 		{
-			"scope": [
-				"string",
-				"meta.embedded.assembly"
-			],
+			"scope": "string",
 			"settings": {
 				"foreground": "#ce9178"
 			}
@@ -305,12 +294,8 @@
 				"keyword.operator.expression",
 				"keyword.operator.cast",
 				"keyword.operator.sizeof",
-				"keyword.operator.alignof",
-				"keyword.operator.typeid",
-				"keyword.operator.alignas",
 				"keyword.operator.instanceof",
-				"keyword.operator.logical.python",
-				"keyword.operator.wordlike"
+				"keyword.operator.logical.python"
 			],
 			"settings": {
 				"foreground": "#569cd6"
@@ -361,11 +346,5 @@
 				"foreground": "#569cd6"
 			}
 		}
-	],
-	"semanticTokenColors": {
-		"newOperator": "#d4d4d4",
-		"stringLiteral": "#ce9178",
-		"customLiteral": "#D4D4D4",
-		"numberLiteral": "#b5cea8",
-	}
+	]
 }

@@ -1,10 +1,7 @@
 {
 	"name": "vs/base",
 	"dependencies": [
-		{
-			"name": "vs",
-			"internal": false
-		}
+		{ "name": "vs", "internal": false }
 	],
 	"libs": [
 		"lib.core.d.ts"
@@ -12,5 +9,7 @@
 	"sources": [
 		"**/*.ts"
 	],
-	"declares": []
+	"declares": [
+		"vs/base/winjs.base.d.ts"
+	]
 }

@@ -3,43 +3,40 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IStorageService, StorageScope, StorageTarget } from 'vs/platform/storage/common/storage';
+import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { isEmptyObject } from 'vs/base/common/types';
-import { onUnexpectedError } from 'vs/base/common/errors';
-
-export type MementoObject = { [key: string]: any };
 
 export class Memento {
 
-	private static readonly globalMementos = new Map<string, ScopedMemento>();
-	private static readonly workspaceMementos = new Map<string, ScopedMemento>();
+	private static globalMementos: { [id: string]: ScopedMemento } = Object.create(null);
+	private static workspaceMementos: { [id: string]: ScopedMemento } = Object.create(null);
 
 	private static readonly COMMON_PREFIX = 'memento/';
 
-	private readonly id: string;
+	private id: string;
 
 	constructor(id: string, private storageService: IStorageService) {
-		this.id = Memento.COMMON_PREFIX + id;
+		this.id = Memento.COMMON_PREFIX + id.toLowerCase();
 	}
 
-	getMemento(scope: StorageScope, target: StorageTarget): MementoObject {
+	getMemento(scope: StorageScope): object {
 
 		// Scope by Workspace
 		if (scope === StorageScope.WORKSPACE) {
-			let workspaceMemento = Memento.workspaceMementos.get(this.id);
+			let workspaceMemento = Memento.workspaceMementos[this.id];
 			if (!workspaceMemento) {
-				workspaceMemento = new ScopedMemento(this.id, scope, target, this.storageService);
-				Memento.workspaceMementos.set(this.id, workspaceMemento);
+				workspaceMemento = new ScopedMemento(this.id, scope, this.storageService);
+				Memento.workspaceMementos[this.id] = workspaceMemento;
 			}
 
 			return workspaceMemento.getMemento();
 		}
 
 		// Scope Global
-		let globalMemento = Memento.globalMementos.get(this.id);
+		let globalMemento = Memento.globalMementos[this.id];
 		if (!globalMemento) {
-			globalMemento = new ScopedMemento(this.id, scope, target, this.storageService);
-			Memento.globalMementos.set(this.id, globalMemento);
+			globalMemento = new ScopedMemento(this.id, scope, this.storageService);
+			Memento.globalMementos[this.id] = globalMemento;
 		}
 
 		return globalMemento.getMemento();
@@ -48,13 +45,13 @@ export class Memento {
 	saveMemento(): void {
 
 		// Workspace
-		const workspaceMemento = Memento.workspaceMementos.get(this.id);
+		const workspaceMemento = Memento.workspaceMementos[this.id];
 		if (workspaceMemento) {
 			workspaceMemento.save();
 		}
 
 		// Global
-		const globalMemento = Memento.globalMementos.get(this.id);
+		const globalMemento = Memento.globalMementos[this.id];
 		if (globalMemento) {
 			globalMemento.save();
 		}
@@ -62,29 +59,20 @@ export class Memento {
 }
 
 class ScopedMemento {
+	private mementoObj: object;
 
-	private readonly mementoObj: MementoObject;
-
-	constructor(private id: string, private scope: StorageScope, private target: StorageTarget, private storageService: IStorageService) {
+	constructor(private id: string, private scope: StorageScope, private storageService: IStorageService) {
 		this.mementoObj = this.load();
 	}
 
-	getMemento(): MementoObject {
+	getMemento(): object {
 		return this.mementoObj;
 	}
 
-	private load(): MementoObject {
+	private load(): object {
 		const memento = this.storageService.get(this.id, this.scope);
 		if (memento) {
-			try {
-				return JSON.parse(memento);
-			} catch (error) {
-				// Seeing reports from users unable to open editors
-				// from memento parsing exceptions. Log the contents
-				// to diagnose further
-				// https://github.com/microsoft/vscode/issues/102251
-				onUnexpectedError(`[memento]: failed to parse contents: ${error} (id: ${this.id}, scope: ${this.scope}, contents: ${memento})`);
-			}
+			return JSON.parse(memento);
 		}
 
 		return {};
@@ -92,7 +80,7 @@ class ScopedMemento {
 
 	save(): void {
 		if (!isEmptyObject(this.mementoObj)) {
-			this.storageService.store(this.id, JSON.stringify(this.mementoObj), this.scope, this.target);
+			this.storageService.store(this.id, JSON.stringify(this.mementoObj), this.scope);
 		} else {
 			this.storageService.remove(this.id, this.scope);
 		}

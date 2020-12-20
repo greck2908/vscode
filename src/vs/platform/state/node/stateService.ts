@@ -3,76 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as path from 'vs/base/common/path';
+import * as path from 'path';
 import * as fs from 'fs';
-import { INativeEnvironmentService } from 'vs/platform/environment/common/environment';
-import { writeFileSync, readFile } from 'vs/base/node/pfs';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
+import { writeFileAndFlushSync } from 'vs/base/node/extfs';
 import { isUndefined, isUndefinedOrNull } from 'vs/base/common/types';
-import { IStateService } from 'vs/platform/state/node/state';
+import { IStateService } from 'vs/platform/state/common/state';
 import { ILogService } from 'vs/platform/log/common/log';
-
-type StorageDatabase = { [key: string]: any; };
 
 export class FileStorage {
 
-	private _database: StorageDatabase | null = null;
-	private lastFlushedSerializedDatabase: string | null = null;
+	private database: object | null = null;
 
-	constructor(private dbPath: string, private onError: (error: Error) => void) { }
+	constructor(private dbPath: string, private onError: (error) => void) { }
 
-	private get database(): StorageDatabase {
-		if (!this._database) {
-			this._database = this.loadSync();
-		}
-
-		return this._database;
-	}
-
-	async init(): Promise<void> {
-		if (this._database) {
-			return; // return if database was already loaded
-		}
-
-		const database = await this.loadAsync();
-
-		if (this._database) {
-			return; // return if database was already loaded
-		}
-
-		this._database = database;
-	}
-
-	private loadSync(): StorageDatabase {
-		try {
-			this.lastFlushedSerializedDatabase = fs.readFileSync(this.dbPath).toString();
-
-			return JSON.parse(this.lastFlushedSerializedDatabase);
-		} catch (error) {
-			if (error.code !== 'ENOENT') {
-				this.onError(error);
-			}
-
-			return {};
+	private ensureLoaded(): void {
+		if (!this.database) {
+			this.database = this.loadSync();
 		}
 	}
 
-	private async loadAsync(): Promise<StorageDatabase> {
-		try {
-			this.lastFlushedSerializedDatabase = (await readFile(this.dbPath)).toString();
+	getItem<T>(key: string, defaultValue?: T): T {
+		this.ensureLoaded();
 
-			return JSON.parse(this.lastFlushedSerializedDatabase);
-		} catch (error) {
-			if (error.code !== 'ENOENT') {
-				this.onError(error);
-			}
-
-			return {};
-		}
-	}
-
-	getItem<T>(key: string, defaultValue: T): T;
-	getItem<T>(key: string, defaultValue?: T): T | undefined;
-	getItem<T>(key: string, defaultValue?: T): T | undefined {
 		const res = this.database[key];
 		if (isUndefinedOrNull(res)) {
 			return defaultValue;
@@ -81,7 +34,8 @@ export class FileStorage {
 		return res;
 	}
 
-	setItem(key: string, data?: object | string | number | boolean | undefined | null): void {
+	setItem(key: string, data: any): void {
+		this.ensureLoaded();
 
 		// Remove an item when it is undefined or null
 		if (isUndefinedOrNull(data)) {
@@ -100,23 +54,30 @@ export class FileStorage {
 	}
 
 	removeItem(key: string): void {
+		this.ensureLoaded();
 
 		// Only update if the key is actually present (not undefined)
 		if (!isUndefined(this.database[key])) {
-			this.database[key] = undefined;
+			this.database[key] = void 0;
 			this.saveSync();
 		}
 	}
 
-	private saveSync(): void {
-		const serializedDatabase = JSON.stringify(this.database, null, 4);
-		if (serializedDatabase === this.lastFlushedSerializedDatabase) {
-			return; // return early if the database has not changed
-		}
-
+	private loadSync(): object {
 		try {
-			writeFileSync(this.dbPath, serializedDatabase); // permission issue can happen here
-			this.lastFlushedSerializedDatabase = serializedDatabase;
+			return JSON.parse(fs.readFileSync(this.dbPath).toString()); // invalid JSON or permission issue can happen here
+		} catch (error) {
+			if (error && error.code !== 'ENOENT') {
+				this.onError(error);
+			}
+
+			return {};
+		}
+	}
+
+	private saveSync(): void {
+		try {
+			writeFileAndFlushSync(this.dbPath, JSON.stringify(this.database, null, 4)); // permission issue can happen here
 		} catch (error) {
 			this.onError(error);
 		}
@@ -125,30 +86,19 @@ export class FileStorage {
 
 export class StateService implements IStateService {
 
-	declare readonly _serviceBrand: undefined;
-
-	private static readonly STATE_FILE = 'storage.json';
+	_serviceBrand: any;
 
 	private fileStorage: FileStorage;
 
-	constructor(
-		@INativeEnvironmentService environmentService: INativeEnvironmentService,
-		@ILogService logService: ILogService
-	) {
-		this.fileStorage = new FileStorage(path.join(environmentService.userDataPath, StateService.STATE_FILE), error => logService.error(error));
+	constructor(@IEnvironmentService environmentService: IEnvironmentService, @ILogService logService: ILogService) {
+		this.fileStorage = new FileStorage(path.join(environmentService.userDataPath, 'storage.json'), error => logService.error(error));
 	}
 
-	init(): Promise<void> {
-		return this.fileStorage.init();
-	}
-
-	getItem<T>(key: string, defaultValue: T): T;
-	getItem<T>(key: string, defaultValue: T | undefined): T | undefined;
-	getItem<T>(key: string, defaultValue?: T): T | undefined {
+	getItem<T>(key: string, defaultValue?: T): T {
 		return this.fileStorage.getItem(key, defaultValue);
 	}
 
-	setItem(key: string, data?: object | string | number | boolean | undefined | null): void {
+	setItem(key: string, data: any): void {
 		this.fileStorage.setItem(key, data);
 	}
 

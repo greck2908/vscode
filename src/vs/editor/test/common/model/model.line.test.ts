@@ -2,14 +2,12 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 import * as assert from 'assert';
 import { LineTokens } from 'vs/editor/common/core/lineTokens';
-import { Range } from 'vs/editor/common/core/range';
-import { TextModel } from 'vs/editor/common/model/textModel';
 import { LanguageIdentifier, MetadataConsts } from 'vs/editor/common/modes';
+import { Range } from 'vs/editor/common/core/range';
 import { ViewLineToken, ViewLineTokenFactory } from 'vs/editor/test/common/core/viewLineToken';
-import { createTextModel } from 'vs/editor/test/common/editorTestUtils';
+import { TextModel } from 'vs/editor/common/model/textModel';
 
 interface ILineEdit {
 	startColumn: number;
@@ -75,8 +73,7 @@ class TestToken {
 		this.color = color;
 	}
 
-	public static toTokens(tokens: TestToken[]): Uint32Array;
-	public static toTokens(tokens: TestToken[] | null): Uint32Array | null {
+	public static toTokens(tokens: TestToken[]): Uint32Array {
 		if (tokens === null) {
 			return null;
 		}
@@ -107,13 +104,11 @@ suite('ModelLinesTokens', () => {
 
 	function testApplyEdits(initial: IBufferLineState[], edits: IEdit[], expected: IBufferLineState[]): void {
 		const initialText = initial.map(el => el.text).join('\n');
-		const model = createTextModel(initialText, TextModel.DEFAULT_CREATION_OPTIONS, new LanguageIdentifier('test', 0));
+		const model = new TextModel(initialText, TextModel.DEFAULT_CREATION_OPTIONS, new LanguageIdentifier('test', 0));
 		for (let lineIndex = 0; lineIndex < initial.length; lineIndex++) {
 			const lineTokens = initial[lineIndex].tokens;
 			const lineTextLength = model.getLineMaxColumn(lineIndex + 1) - 1;
-			const tokens = TestToken.toTokens(lineTokens);
-			LineTokens.convertToEndOffset(tokens, lineTextLength);
-			model.setLineTokens(lineIndex + 1, tokens);
+			model._tokens._setTokens(0, lineIndex, lineTextLength, TestToken.toTokens(lineTokens));
 		}
 
 		model.applyEdits(edits.map((ed) => ({
@@ -443,17 +438,15 @@ suite('ModelLinesTokens', () => {
 	}
 
 	test('insertion on empty line', () => {
-		const model = createTextModel('some text', TextModel.DEFAULT_CREATION_OPTIONS, new LanguageIdentifier('test', 0));
-		const tokens = TestToken.toTokens([new TestToken(0, 1)]);
-		LineTokens.convertToEndOffset(tokens, model.getLineMaxColumn(1) - 1);
-		model.setLineTokens(1, tokens);
+		const model = new TextModel('some text', TextModel.DEFAULT_CREATION_OPTIONS, new LanguageIdentifier('test', 0));
+		model._tokens._setTokens(0, 0, model.getLineMaxColumn(1) - 1, TestToken.toTokens([new TestToken(0, 1)]));
 
 		model.applyEdits([{
 			range: new Range(1, 1, 1, 10),
 			text: ''
 		}]);
 
-		model.setLineTokens(1, new Uint32Array(0));
+		model._tokens._setTokens(0, 0, model.getLineMaxColumn(1) - 1, new Uint32Array(0));
 
 		model.applyEdits([{
 			range: new Range(1, 1, 1, 1),
@@ -665,7 +658,7 @@ suite('ModelLinesTokens', () => {
 	test('updates tokens on insertion 10', () => {
 		testLineEditTokens(
 			'',
-			[],
+			null,
 			[{
 				startColumn: 1,
 				endColumn: 1,

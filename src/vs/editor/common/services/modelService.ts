@@ -5,24 +5,20 @@
 
 import { Event } from 'vs/base/common/event';
 import { URI } from 'vs/base/common/uri';
-import { ITextBufferFactory, ITextModel, ITextModelCreationOptions } from 'vs/editor/common/model';
-import { ILanguageSelection } from 'vs/editor/common/services/modeService';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
-import { DocumentSemanticTokensProvider, DocumentRangeSemanticTokensProvider } from 'vs/editor/common/modes';
-import { SemanticTokensProviderStyling } from 'vs/editor/common/services/semanticTokensProviderStyling';
+import { ITextModel, ITextModelCreationOptions, ITextBufferFactory } from 'vs/editor/common/model';
+import { IMode } from 'vs/editor/common/modes';
 
 export const IModelService = createDecorator<IModelService>('modelService');
 
-export type DocumentTokensProvider = DocumentSemanticTokensProvider | DocumentRangeSemanticTokensProvider;
-
 export interface IModelService {
-	readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
-	createModel(value: string | ITextBufferFactory, languageSelection: ILanguageSelection | null, resource?: URI, isForSimpleWidget?: boolean): ITextModel;
+	createModel(value: string | ITextBufferFactory, modeOrPromise: Promise<IMode> | IMode, resource: URI | undefined, isForSimpleWidget?: boolean): ITextModel;
 
 	updateModel(model: ITextModel, value: string | ITextBufferFactory): void;
 
-	setMode(model: ITextModel, languageSelection: ILanguageSelection): void;
+	setMode(model: ITextModel, modeOrPromise: Promise<IMode> | IMode): void;
 
 	destroyModel(resource: URI): void;
 
@@ -31,8 +27,6 @@ export interface IModelService {
 	getCreationOptions(language: string, resource: URI, isForSimpleWidget: boolean): ITextModelCreationOptions;
 
 	getModel(resource: URI): ITextModel | null;
-
-	getSemanticTokensProviderStyling(provider: DocumentTokensProvider): SemanticTokensProviderStyling;
 
 	onModelAdded: Event<ITextModel>;
 

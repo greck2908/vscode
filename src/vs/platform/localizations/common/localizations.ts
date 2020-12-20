@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { TPromise } from 'vs/base/common/winjs.base';
 import { Event } from 'vs/base/common/event';
 
 export interface ILocalization {
@@ -19,12 +20,17 @@ export interface ITranslation {
 	path: string;
 }
 
+export const enum LanguageType {
+	Core = 1,
+	Contributed
+}
+
 export const ILocalizationsService = createDecorator<ILocalizationsService>('localizationsService');
 export interface ILocalizationsService {
-	readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	readonly onDidLanguagesChange: Event<void>;
-	getLanguageIds(): Promise<string[]>;
+	getLanguageIds(type?: LanguageType): TPromise<string[]>;
 }
 
 export function isValidLocalization(localization: ILocalization): boolean {

@@ -4,11 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { LanguageModelCache, getLanguageModelCache } from '../languageModelCache';
-import { Stylesheet, LanguageService as CSSLanguageService } from 'vscode-css-languageservice';
-import { LanguageMode, Workspace, Color, TextDocument, Position, Range, CompletionList, DocumentContext, Settings } from './languageModes';
+import { TextDocument, Position, Range, CompletionList } from 'vscode-languageserver-types';
+import { getCSSLanguageService, Stylesheet, FoldingRange } from 'vscode-css-languageservice';
+import { LanguageMode, Workspace } from './languageModes';
 import { HTMLDocumentRegions, CSS_STYLE_RULE } from './embeddedSupport';
+import { Color } from 'vscode-languageserver';
 
-export function getCSSMode(cssLanguageService: CSSLanguageService, documentRegions: LanguageModelCache<HTMLDocumentRegions>, workspace: Workspace): LanguageMode {
+export function getCSSMode(documentRegions: LanguageModelCache<HTMLDocumentRegions>, workspace: Workspace): LanguageMode {
+	let cssLanguageService = getCSSLanguageService();
 	let embeddedCSSDocuments = getLanguageModelCache<TextDocument>(10, 60, document => documentRegions.get(document).getEmbeddedDocument('css'));
 	let cssStylesheets = getLanguageModelCache<Stylesheet>(10, 60, document => cssLanguageService.parseStylesheet(document));
 
@@ -16,50 +19,46 @@ export function getCSSMode(cssLanguageService: CSSLanguageService, documentRegio
 		getId() {
 			return 'css';
 		},
-		async doValidation(document: TextDocument, settings = workspace.settings) {
+		doValidation(document: TextDocument, settings = workspace.settings) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.doValidation(embedded, cssStylesheets.get(embedded), settings && settings.css);
 		},
-		async doComplete(document: TextDocument, position: Position, documentContext: DocumentContext, _settings = workspace.settings) {
+		doComplete(document: TextDocument, position: Position, _settings = workspace.settings) {
 			let embedded = embeddedCSSDocuments.get(document);
 			const stylesheet = cssStylesheets.get(embedded);
-			return cssLanguageService.doComplete2(embedded, position, stylesheet, documentContext) || CompletionList.create();
+			return cssLanguageService.doComplete(embedded, position, stylesheet) || CompletionList.create();
 		},
-		async doHover(document: TextDocument, position: Position, settings?: Settings) {
+		doHover(document: TextDocument, position: Position) {
 			let embedded = embeddedCSSDocuments.get(document);
-			return cssLanguageService.doHover(embedded, position, cssStylesheets.get(embedded), settings?.html?.hover);
+			return cssLanguageService.doHover(embedded, position, cssStylesheets.get(embedded));
 		},
-		async findDocumentHighlight(document: TextDocument, position: Position) {
+		findDocumentHighlight(document: TextDocument, position: Position) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.findDocumentHighlights(embedded, position, cssStylesheets.get(embedded));
 		},
-		async findDocumentSymbols(document: TextDocument) {
+		findDocumentSymbols(document: TextDocument) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.findDocumentSymbols(embedded, cssStylesheets.get(embedded)).filter(s => s.name !== CSS_STYLE_RULE);
 		},
-		async findDefinition(document: TextDocument, position: Position) {
+		findDefinition(document: TextDocument, position: Position) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.findDefinition(embedded, position, cssStylesheets.get(embedded));
 		},
-		async findReferences(document: TextDocument, position: Position) {
+		findReferences(document: TextDocument, position: Position) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.findReferences(embedded, position, cssStylesheets.get(embedded));
 		},
-		async findDocumentColors(document: TextDocument) {
+		findDocumentColors(document: TextDocument) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.findDocumentColors(embedded, cssStylesheets.get(embedded));
 		},
-		async getColorPresentations(document: TextDocument, color: Color, range: Range) {
+		getColorPresentations(document: TextDocument, color: Color, range: Range) {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.getColorPresentations(embedded, cssStylesheets.get(embedded), color, range);
 		},
-		async getFoldingRanges(document: TextDocument) {
+		getFoldingRanges(document: TextDocument): FoldingRange[] {
 			let embedded = embeddedCSSDocuments.get(document);
 			return cssLanguageService.getFoldingRanges(embedded, {});
-		},
-		async getSelectionRange(document: TextDocument, position: Position) {
-			let embedded = embeddedCSSDocuments.get(document);
-			return cssLanguageService.getSelectionRanges(embedded, [position], cssStylesheets.get(embedded))[0];
 		},
 		onDocumentRemoved(document: TextDocument) {
 			embeddedCSSDocuments.onDocumentRemoved(document);

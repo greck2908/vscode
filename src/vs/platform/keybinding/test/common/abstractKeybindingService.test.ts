@@ -3,20 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import * as assert from 'assert';
-import { KeyChord, KeyCode, KeyMod, Keybinding, ResolvedKeybinding, SimpleKeybinding, createKeybinding, createSimpleKeybinding } from 'vs/base/common/keyCodes';
-import { OS } from 'vs/base/common/platform';
+import { ResolvedKeybinding, KeyCode, KeyMod, KeyChord, Keybinding, createKeybinding, createSimpleKeybinding, SimpleKeybinding } from 'vs/base/common/keyCodes';
+import { AbstractKeybindingService } from 'vs/platform/keybinding/common/abstractKeybindingService';
+import { USLayoutResolvedKeybinding } from 'vs/platform/keybinding/common/usLayoutResolvedKeybinding';
+import { IDisposable } from 'vs/base/common/lifecycle';
 import Severity from 'vs/base/common/severity';
 import { ICommandService } from 'vs/platform/commands/common/commands';
-import { ContextKeyExpr, IContext, IContextKeyService, IContextKeyServiceTarget, ContextKeyExpression } from 'vs/platform/contextkey/common/contextkey';
-import { AbstractKeybindingService } from 'vs/platform/keybinding/common/abstractKeybindingService';
-import { IKeyboardEvent } from 'vs/platform/keybinding/common/keybinding';
 import { KeybindingResolver } from 'vs/platform/keybinding/common/keybindingResolver';
+import { IContext, ContextKeyExpr, IContextKeyService, IContextKeyServiceTarget } from 'vs/platform/contextkey/common/contextkey';
+import { IStatusbarService } from 'vs/platform/statusbar/common/statusbar';
 import { ResolvedKeybindingItem } from 'vs/platform/keybinding/common/resolvedKeybindingItem';
-import { USLayoutResolvedKeybinding } from 'vs/platform/keybinding/common/usLayoutResolvedKeybinding';
-import { INotification, INotificationService, IPromptChoice, IPromptOptions, NoOpNotification, IStatusMessageOptions } from 'vs/platform/notification/common/notification';
+import { OS } from 'vs/base/common/platform';
+import { IKeyboardEvent } from 'vs/platform/keybinding/common/keybinding';
 import { NullTelemetryService } from 'vs/platform/telemetry/common/telemetryUtils';
-import { Disposable } from 'vs/base/common/lifecycle';
-import { NullLogService } from 'vs/platform/log/common/log';
+import { INotificationService, NoOpNotification, INotification, IPromptChoice, IPromptOptions } from 'vs/platform/notification/common/notification';
 
 function createContext(ctx: any) {
 	return {
@@ -35,9 +35,10 @@ suite('AbstractKeybindingService', () => {
 			resolver: KeybindingResolver,
 			contextKeyService: IContextKeyService,
 			commandService: ICommandService,
-			notificationService: INotificationService
+			notificationService: INotificationService,
+			statusService?: IStatusbarService
 		) {
-			super(contextKeyService, commandService, NullTelemetryService, notificationService, new NullLogService());
+			super(contextKeyService, commandService, NullTelemetryService, notificationService, statusService);
 			this._resolver = resolver;
 		}
 
@@ -60,7 +61,7 @@ suite('AbstractKeybindingService', () => {
 				keyboardEvent.altKey,
 				keyboardEvent.metaKey,
 				keyboardEvent.keyCode
-			).toChord();
+			);
 			return this.resolveKeybinding(keybinding)[0];
 		}
 
@@ -71,33 +72,20 @@ suite('AbstractKeybindingService', () => {
 		public testDispatch(kb: number): boolean {
 			const keybinding = createSimpleKeybinding(kb, OS);
 			return this._dispatch({
-				_standardKeyboardEventBrand: true,
 				ctrlKey: keybinding.ctrlKey,
 				shiftKey: keybinding.shiftKey,
 				altKey: keybinding.altKey,
 				metaKey: keybinding.metaKey,
 				keyCode: keybinding.keyCode,
-				code: null!
-			}, null!);
-		}
-
-		public _dumpDebugInfo(): string {
-			return '';
-		}
-
-		public _dumpDebugInfoJSON(): string {
-			return '';
-		}
-
-		public registerSchemaContribution() {
-			// noop
+				code: null
+			}, null);
 		}
 	}
 
-	let createTestKeybindingService: (items: ResolvedKeybindingItem[], contextValue?: any) => TestKeybindingService = null!;
+	let createTestKeybindingService: (items: ResolvedKeybindingItem[], contextValue?: any) => TestKeybindingService = null;
 	let currentContextValue: IContext | null = null;
-	let executeCommandCalls: { commandId: string; args: any[]; }[] = null!;
-	let showMessageCalls: { sev: Severity, message: any; }[] = null!;
+	let executeCommandCalls: { commandId: string; args: any[]; }[] = null;
+	let showMessageCalls: { sev: Severity, message: any; }[] = null;
 	let statusMessageCalls: string[] | null = null;
 	let statusMessageCallsDisposed: string[] | null = null;
 
@@ -111,29 +99,26 @@ suite('AbstractKeybindingService', () => {
 
 			let contextKeyService: IContextKeyService = {
 				_serviceBrand: undefined,
-				dispose: undefined!,
-				onDidChangeContext: undefined!,
-				bufferChangeEvents() { },
-				createKey: undefined!,
-				contextMatchesRules: undefined!,
-				getContextKeyValue: undefined!,
-				createScoped: undefined!,
+				dispose: undefined,
+				onDidChangeContext: undefined,
+				createKey: undefined,
+				contextMatchesRules: undefined,
+				getContextKeyValue: undefined,
+				createScoped: undefined,
 				getContext: (target: IContextKeyServiceTarget): any => {
 					return currentContextValue;
-				},
-				updateParent: () => { }
+				}
 			};
 
 			let commandService: ICommandService = {
 				_serviceBrand: undefined,
-				onWillExecuteCommand: () => Disposable.None,
-				onDidExecuteCommand: () => Disposable.None,
+				onWillExecuteCommand: () => ({ dispose: () => { } }),
 				executeCommand: (commandId: string, ...args: any[]): Promise<any> => {
 					executeCommandCalls.push({
 						commandId: commandId,
 						args: args
 					});
-					return Promise.resolve(undefined);
+					return Promise.resolve(void 0);
 				}
 			};
 
@@ -157,49 +142,51 @@ suite('AbstractKeybindingService', () => {
 				},
 				prompt(severity: Severity, message: string, choices: IPromptChoice[], options?: IPromptOptions) {
 					throw new Error('not implemented');
-				},
-				status(message: string, options?: IStatusMessageOptions) {
-					statusMessageCalls!.push(message);
-					return {
-						dispose: () => {
-							statusMessageCallsDisposed!.push(message);
-						}
-					};
-				},
-				setFilter() { }
+				}
 			};
 
-			let resolver = new KeybindingResolver(items, [], () => { });
+			let statusbarService: IStatusbarService = {
+				_serviceBrand: undefined,
+				addEntry: undefined,
+				setStatusMessage: (message: string, autoDisposeAfter?: number, delayBy?: number): IDisposable => {
+					statusMessageCalls.push(message);
+					return {
+						dispose: () => {
+							statusMessageCallsDisposed.push(message);
+						}
+					};
+				}
+			};
 
-			return new TestKeybindingService(resolver, contextKeyService, commandService, notificationService);
+			let resolver = new KeybindingResolver(items, []);
+
+			return new TestKeybindingService(resolver, contextKeyService, commandService, notificationService, statusbarService);
 		};
 	});
 
 	teardown(() => {
 		currentContextValue = null;
-		executeCommandCalls = null!;
-		showMessageCalls = null!;
-		createTestKeybindingService = null!;
+		executeCommandCalls = null;
+		showMessageCalls = null;
+		createTestKeybindingService = null;
 		statusMessageCalls = null;
 		statusMessageCallsDisposed = null;
 	});
 
-	function kbItem(keybinding: number, command: string, when?: ContextKeyExpression): ResolvedKeybindingItem {
-		const resolvedKeybinding = (keybinding !== 0 ? new USLayoutResolvedKeybinding(createKeybinding(keybinding, OS)!, OS) : undefined);
+	function kbItem(keybinding: number, command: string, when: ContextKeyExpr | null = null): ResolvedKeybindingItem {
+		const resolvedKeybinding = (keybinding !== 0 ? new USLayoutResolvedKeybinding(createKeybinding(keybinding, OS), OS) : null);
 		return new ResolvedKeybindingItem(
 			resolvedKeybinding,
 			command,
 			null,
 			when,
-			true,
-			null,
-			false
+			true
 		);
 	}
 
 	function toUsLabel(keybinding: number): string {
-		const usResolvedKeybinding = new USLayoutResolvedKeybinding(createKeybinding(keybinding, OS)!, OS);
-		return usResolvedKeybinding.getLabel()!;
+		const usResolvedKeybinding = new USLayoutResolvedKeybinding(createKeybinding(keybinding, OS), OS);
+		return usResolvedKeybinding.getLabel();
 	}
 
 	test('issue #16498: chord mode is quit for invalid chords', () => {

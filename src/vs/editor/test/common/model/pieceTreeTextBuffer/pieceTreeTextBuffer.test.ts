@@ -2,19 +2,18 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 import * as assert from 'assert';
-import { WordCharacterClassifier } from 'vs/editor/common/controller/wordCharacterClassifier';
 import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
-import { DefaultEndOfLine, ITextSnapshot } from 'vs/editor/common/model';
-import { PieceTreeBase } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeBase';
-import { PieceTreeTextBuffer } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer';
 import { PieceTreeTextBufferBuilder } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder';
-import { NodeColor, SENTINEL, TreeNode } from 'vs/editor/common/model/pieceTreeTextBuffer/rbTreeBase';
-import { createTextModel } from 'vs/editor/test/common/editorTestUtils';
+import { DefaultEndOfLine } from 'vs/editor/common/model';
+import { PieceTreeBase } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeBase';
+import { SENTINEL, NodeColor, TreeNode } from 'vs/editor/common/model/pieceTreeTextBuffer/rbTreeBase';
+import { PieceTreeTextBuffer } from 'vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer';
+import { TextModel } from 'vs/editor/common/model/textModel';
+import { ITextSnapshot } from 'vs/platform/files/common/files';
 import { SearchData } from 'vs/editor/common/model/textModelSearch';
-import { splitLines } from 'vs/base/common/strings';
+import { WordCharacterClassifier } from 'vs/editor/common/controller/wordCharacterClassifier';
 
 const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\r\n';
 
@@ -76,7 +75,7 @@ function trimLineFeed(text: string): string {
 //#region Assertion
 
 function testLinesContent(str: string, pieceTable: PieceTreeBase) {
-	let lines = splitLines(str);
+	let lines = str.split(/\r\n|\r|\n/);
 	assert.equal(pieceTable.getLineCount(), lines.length);
 	assert.equal(pieceTable.getLinesRawContent(), str);
 	for (let i = 0; i < lines.length; i++) {
@@ -106,7 +105,7 @@ function testLineStarts(str: string, pieceTable: PieceTreeBase) {
 	let prevMatchStartIndex = -1;
 	let prevMatchLength = 0;
 
-	let m: RegExpExecArray | null;
+	let m: RegExpExecArray;
 	do {
 		if (prevMatchStartIndex + prevMatchLength === str.length) {
 			// Reached the end of the line
@@ -154,8 +153,8 @@ function testLineStarts(str: string, pieceTable: PieceTreeBase) {
 
 function createTextBuffer(val: string[], normalizeEOL: boolean = true): PieceTreeBase {
 	let bufferBuilder = new PieceTreeTextBufferBuilder();
-	for (const chunk of val) {
-		bufferBuilder.acceptChunk(chunk);
+	for (let i = 0; i < val.length; i++) {
+		bufferBuilder.acceptChunk(val[i]);
 	}
 	let factory = bufferBuilder.finish(normalizeEOL);
 	return (<PieceTreeTextBuffer>factory.create(DefaultEndOfLine.LF)).getPieceTree();
@@ -998,7 +997,7 @@ suite('CRLF', () => {
 		pieceTable.delete(2, 3);
 		str = str.substring(0, 2) + str.substring(2 + 3);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1013,7 +1012,7 @@ suite('CRLF', () => {
 		pieceTable.delete(4, 1);
 		str = str.substring(0, 4) + str.substring(4 + 1);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1034,7 +1033,7 @@ suite('CRLF', () => {
 		pieceTable.insert(3, '\r\r\r\n');
 		str = str.substring(0, 3) + '\r\r\r\n' + str.substring(3);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1206,7 +1205,7 @@ suite('centralized lineStarts with CRLF', () => {
 		pieceTable.delete(2, 3);
 		str = str.substring(0, 2) + str.substring(2 + 3);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1219,7 +1218,7 @@ suite('centralized lineStarts with CRLF', () => {
 		pieceTable.delete(4, 1);
 		str = str.substring(0, 4) + str.substring(4 + 1);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1239,7 +1238,7 @@ suite('centralized lineStarts with CRLF', () => {
 		pieceTable.insert(3, '\r\r\r\n');
 		str = str.substring(0, 3) + '\r\r\r\n' + str.substring(3);
 
-		let lines = splitLines(str);
+		let lines = str.split(/\r\n|\r|\n/);
 		assert.equal(pieceTable.getLineCount(), lines.length);
 		assertTreeInvariants(pieceTable);
 	});
@@ -1762,7 +1761,7 @@ function getValueInSnapshot(snapshot: ITextSnapshot) {
 }
 suite('snapshot', () => {
 	test('bug #45564, piece tree pieces should be immutable', () => {
-		const model = createTextModel('\n');
+		const model = TextModel.createFromString('\n');
 		model.applyEdits([
 			{
 				range: new Range(2, 1, 2, 1),
@@ -1790,7 +1789,7 @@ suite('snapshot', () => {
 	});
 
 	test('immutable snapshot 1', () => {
-		const model = createTextModel('abc\ndef');
+		const model = TextModel.createFromString('abc\ndef');
 		const snapshot = model.createSnapshot();
 		model.applyEdits([
 			{
@@ -1810,7 +1809,7 @@ suite('snapshot', () => {
 	});
 
 	test('immutable snapshot 2', () => {
-		const model = createTextModel('abc\ndef');
+		const model = TextModel.createFromString('abc\ndef');
 		const snapshot = model.createSnapshot();
 		model.applyEdits([
 			{
@@ -1830,7 +1829,7 @@ suite('snapshot', () => {
 	});
 
 	test('immutable snapshot 3', () => {
-		const model = createTextModel('abc\ndef');
+		const model = TextModel.createFromString('abc\ndef');
 		model.applyEdits([
 			{
 				range: new Range(2, 4, 2, 4),

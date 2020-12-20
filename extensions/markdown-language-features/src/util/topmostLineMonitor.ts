@@ -4,28 +4,33 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { Disposable } from '../util/dispose';
+import { disposeAll } from '../util/dispose';
 import { isMarkdownFile } from './file';
 
-export class TopmostLineMonitor extends Disposable {
+export class MarkdownFileTopmostLineMonitor {
+	private readonly disposables: vscode.Disposable[] = [];
 
 	private readonly pendingUpdates = new Map<string, number>();
+
 	private readonly throttle = 50;
 
 	constructor() {
-		super();
-		this._register(vscode.window.onDidChangeTextEditorVisibleRanges(event => {
+		vscode.window.onDidChangeTextEditorVisibleRanges(event => {
 			if (isMarkdownFile(event.textEditor.document)) {
 				const line = getVisibleLine(event.textEditor);
 				if (typeof line === 'number') {
 					this.updateLine(event.textEditor.document.uri, line);
 				}
 			}
-		}));
+		}, null, this.disposables);
 	}
 
-	private readonly _onChanged = this._register(new vscode.EventEmitter<{ readonly resource: vscode.Uri, readonly line: number }>());
-	public readonly onDidChanged = this._onChanged.event;
+	dispose() {
+		disposeAll(this.disposables);
+	}
+
+	private readonly _onDidChangeTopmostLineEmitter = new vscode.EventEmitter<{ resource: vscode.Uri, line: number }>();
+	public readonly onDidChangeTopmostLine = this._onDidChangeTopmostLineEmitter.event;
 
 	private updateLine(
 		resource: vscode.Uri,
@@ -36,7 +41,7 @@ export class TopmostLineMonitor extends Disposable {
 			// schedule update
 			setTimeout(() => {
 				if (this.pendingUpdates.has(key)) {
-					this._onChanged.fire({
+					this._onDidChangeTopmostLineEmitter.fire({
 						resource,
 						line: this.pendingUpdates.get(key) as number
 					});

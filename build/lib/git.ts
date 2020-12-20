@@ -18,7 +18,7 @@ export function getVersion(repo: string): string | undefined {
 	try {
 		head = fs.readFileSync(headPath, 'utf8').trim();
 	} catch (e) {
-		return undefined;
+		return void 0;
 	}
 
 	if (/^[0-9a-f]{40}$/i.test(head)) {
@@ -28,7 +28,7 @@ export function getVersion(repo: string): string | undefined {
 	const refMatch = /^ref: (.*)$/.exec(head);
 
 	if (!refMatch) {
-		return undefined;
+		return void 0;
 	}
 
 	const ref = refMatch[1];
@@ -46,7 +46,7 @@ export function getVersion(repo: string): string | undefined {
 	try {
 		refsRaw = fs.readFileSync(packedRefsPath, 'utf8').trim();
 	} catch (e) {
-		return undefined;
+		return void 0;
 	}
 
 	const refsRegex = /^([0-9a-f]{40})\s+(.+)$/gm;

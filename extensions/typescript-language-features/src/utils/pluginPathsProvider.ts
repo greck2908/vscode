@@ -9,6 +9,7 @@ import { RelativeWorkspacePathResolver } from './relativePathResolver';
 
 
 export class TypeScriptPluginPathsProvider {
+	public readonly relativePathResolver: RelativeWorkspacePathResolver = new RelativeWorkspacePathResolver();
 
 	public constructor(
 		private configuration: TypeScriptServiceConfiguration
@@ -31,7 +32,7 @@ export class TypeScriptPluginPathsProvider {
 			return [pluginPath];
 		}
 
-		const workspacePath = RelativeWorkspacePathResolver.asAbsoluteWorkspacePath(pluginPath);
+		const workspacePath = this.relativePathResolver.asAbsoluteWorkspacePath(pluginPath);
 		if (workspacePath !== undefined) {
 			return [workspacePath];
 		}

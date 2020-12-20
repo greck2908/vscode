@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
-import { DisposableStore } from 'vs/base/common/lifecycle';
+import { dispose, IDisposable } from 'vs/base/common/lifecycle';
+import { repeat } from 'vs/base/common/strings';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { EditorCommand, registerEditorCommand, registerEditorContribution } from 'vs/editor/browser/editorExtensions';
 import { Range } from 'vs/editor/common/core/range';
@@ -18,48 +19,25 @@ import { ContextKeyExpr, IContextKey, IContextKeyService, RawContextKey } from '
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { ILogService } from 'vs/platform/log/common/log';
 import { SnippetSession } from './snippetSession';
-import { OvertypingCapturer } from 'vs/editor/contrib/suggest/suggestOvertypingCapturer';
-
-export interface ISnippetInsertOptions {
-	overwriteBefore: number;
-	overwriteAfter: number;
-	adjustWhitespace: boolean;
-	undoStopBefore: boolean;
-	undoStopAfter: boolean;
-	clipboardText: string | undefined;
-	overtypingCapturer: OvertypingCapturer | undefined;
-}
-
-const _defaultOptions: ISnippetInsertOptions = {
-	overwriteBefore: 0,
-	overwriteAfter: 0,
-	undoStopBefore: true,
-	undoStopAfter: true,
-	adjustWhitespace: true,
-	clipboardText: undefined,
-	overtypingCapturer: undefined
-};
 
 export class SnippetController2 implements IEditorContribution {
 
-	public static ID = 'snippetController2';
-
 	static get(editor: ICodeEditor): SnippetController2 {
-		return editor.getContribution<SnippetController2>(SnippetController2.ID);
+		return editor.getContribution<SnippetController2>('snippetController2');
 	}
 
-	static readonly InSnippetMode = new RawContextKey('inSnippetMode', false);
-	static readonly HasNextTabstop = new RawContextKey('hasNextTabstop', false);
-	static readonly HasPrevTabstop = new RawContextKey('hasPrevTabstop', false);
+	static InSnippetMode = new RawContextKey('inSnippetMode', false);
+	static HasNextTabstop = new RawContextKey('hasNextTabstop', false);
+	static HasPrevTabstop = new RawContextKey('hasPrevTabstop', false);
 
 	private readonly _inSnippet: IContextKey<boolean>;
 	private readonly _hasNextTabstop: IContextKey<boolean>;
 	private readonly _hasPrevTabstop: IContextKey<boolean>;
 
-	private _session?: SnippetSession;
-	private _snippetListener = new DisposableStore();
-	private _modelVersionId: number = -1;
-	private _currentChoice?: Choice;
+	private _session: SnippetSession;
+	private _snippetListener: IDisposable[] = [];
+	private _modelVersionId: number;
+	private _currentChoice: Choice;
 
 	constructor(
 		private readonly _editor: ICodeEditor,
@@ -75,19 +53,24 @@ export class SnippetController2 implements IEditorContribution {
 		this._inSnippet.reset();
 		this._hasPrevTabstop.reset();
 		this._hasNextTabstop.reset();
-		this._session?.dispose();
-		this._snippetListener.dispose();
+		dispose(this._session);
+	}
+
+	getId(): string {
+		return 'snippetController2';
 	}
 
 	insert(
 		template: string,
-		opts?: Partial<ISnippetInsertOptions>
+		overwriteBefore: number = 0, overwriteAfter: number = 0,
+		undoStopBefore: boolean = true, undoStopAfter: boolean = true,
+		adjustWhitespace: boolean = true,
 	): void {
 		// this is here to find out more about the yet-not-understood
 		// error that sometimes happens when we fail to inserted a nested
 		// snippet
 		try {
-			this._doInsert(template, typeof opts === 'undefined' ? _defaultOptions : { ..._defaultOptions, ...opts });
+			this._doInsert(template, overwriteBefore, overwriteAfter, undoStopBefore, undoStopAfter, adjustWhitespace);
 
 		} catch (e) {
 			this.cancel();
@@ -100,41 +83,42 @@ export class SnippetController2 implements IEditorContribution {
 
 	private _doInsert(
 		template: string,
-		opts: ISnippetInsertOptions
+		overwriteBefore: number = 0, overwriteAfter: number = 0,
+		undoStopBefore: boolean = true, undoStopAfter: boolean = true,
+		adjustWhitespace: boolean = true,
 	): void {
-		if (!this._editor.hasModel()) {
-			return;
-		}
 
 		// don't listen while inserting the snippet
 		// as that is the inflight state causing cancelation
-		this._snippetListener.clear();
+		this._snippetListener = dispose(this._snippetListener);
 
-		if (opts.undoStopBefore) {
+		if (undoStopBefore) {
 			this._editor.getModel().pushStackElement();
 		}
 
 		if (!this._session) {
 			this._modelVersionId = this._editor.getModel().getAlternativeVersionId();
-			this._session = new SnippetSession(this._editor, template, opts);
+			this._session = new SnippetSession(this._editor, template, overwriteBefore, overwriteAfter, adjustWhitespace);
 			this._session.insert();
 		} else {
-			this._session.merge(template, opts);
+			this._session.merge(template, overwriteBefore, overwriteAfter, adjustWhitespace);
 		}
 
-		if (opts.undoStopAfter) {
+		if (undoStopAfter) {
 			this._editor.getModel().pushStackElement();
 		}
 
 		this._updateState();
 
-		this._snippetListener.add(this._editor.onDidChangeModelContent(e => e.isFlush && this.cancel()));
-		this._snippetListener.add(this._editor.onDidChangeModel(() => this.cancel()));
-		this._snippetListener.add(this._editor.onDidChangeCursorSelection(() => this._updateState()));
+		this._snippetListener = [
+			this._editor.onDidChangeModelContent(e => e.isFlush && this.cancel()),
+			this._editor.onDidChangeModel(() => this.cancel()),
+			this._editor.onDidChangeCursorSelection(() => this._updateState())
+		];
 	}
 
 	private _updateState(): void {
-		if (!this._session || !this._editor.hasModel()) {
+		if (!this._session) {
 			// canceled in the meanwhile
 			return;
 		}
@@ -163,11 +147,6 @@ export class SnippetController2 implements IEditorContribution {
 	}
 
 	private _handleChoice(): void {
-		if (!this._session || !this._editor.hasModel()) {
-			this._currentChoice = undefined;
-			return;
-		}
-
 		const { choice } = this._session;
 		if (!choice) {
 			this._currentChoice = undefined;
@@ -193,8 +172,8 @@ export class SnippetController2 implements IEditorContribution {
 					insertText: option.value,
 					// insertText: `\${1|${after.concat(before).join(',')}|}$0`,
 					// snippetType: 'textmate',
-					sortText: 'a'.repeat(i + 1),
-					range: Range.fromPositions(this._editor.getPosition()!, this._editor.getPosition()!.delta(0, first.value.length))
+					sortText: repeat('a', i),
+					overwriteAfter: first.value.length
 				};
 			}));
 		}
@@ -206,41 +185,31 @@ export class SnippetController2 implements IEditorContribution {
 		}
 	}
 
-	cancel(resetSelection: boolean = false): void {
+	cancel(): void {
 		this._inSnippet.reset();
 		this._hasPrevTabstop.reset();
 		this._hasNextTabstop.reset();
-		this._snippetListener.clear();
-		this._session?.dispose();
+		dispose(this._snippetListener);
+		dispose(this._session);
 		this._session = undefined;
 		this._modelVersionId = -1;
-		if (resetSelection) {
-			// reset selection to the primary cursor when being asked
-			// for. this happens when explicitly cancelling snippet mode,
-			// e.g. when pressing ESC
-			this._editor.setSelections([this._editor.getSelection()!]);
-		}
 	}
 
 	prev(): void {
-		if (this._session) {
-			this._session.prev();
-		}
+		this._session.prev();
 		this._updateState();
 	}
 
 	next(): void {
-		if (this._session) {
-			this._session.next();
-		}
+		this._session.next();
 		this._updateState();
 	}
 
 	isInSnippet(): boolean {
-		return Boolean(this._inSnippet.get());
+		return this._inSnippet.get();
 	}
 
-	getSessionEnclosingRange(): Range | undefined {
+	getSessionEnclosingRange(): Range {
 		if (this._session) {
 			return this._session.getEnclosingRange();
 		}
@@ -249,7 +218,7 @@ export class SnippetController2 implements IEditorContribution {
 }
 
 
-registerEditorContribution(SnippetController2.ID, SnippetController2);
+registerEditorContribution(SnippetController2);
 
 const CommandCtor = EditorCommand.bindToContribution<SnippetController2>(SnippetController2.get);
 
@@ -276,7 +245,7 @@ registerEditorCommand(new CommandCtor({
 registerEditorCommand(new CommandCtor({
 	id: 'leaveSnippet',
 	precondition: SnippetController2.InSnippetMode,
-	handler: ctrl => ctrl.cancel(true),
+	handler: ctrl => ctrl.cancel(),
 	kbOpts: {
 		weight: KeybindingWeight.EditorContrib + 30,
 		kbExpr: EditorContextKeys.editorTextFocus,

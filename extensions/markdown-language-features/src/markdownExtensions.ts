@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import * as arrays from './util/arrays';
-import { Disposable } from './util/dispose';
+import * as path from 'path';
 
 const resolveExtensionResource = (extension: vscode.Extension<any>, resourcePath: string): vscode.Uri => {
-	return vscode.Uri.joinPath(extension.extensionUri, resourcePath);
+	return vscode.Uri.file(path.join(extension.extensionPath, resourcePath))
+		.with({ scheme: 'vscode-resource' });
 };
 
-const resolveExtensionResources = (extension: vscode.Extension<any>, resourcePaths: unknown): vscode.Uri[] => {
+const resolveExtensionResources = (extension: vscode.Extension<any>, resourcePaths: any): vscode.Uri[] => {
 	const result: vscode.Uri[] = [];
 	if (Array.isArray(resourcePaths)) {
 		for (const resource of resourcePaths) {
@@ -26,138 +26,96 @@ const resolveExtensionResources = (extension: vscode.Extension<any>, resourcePat
 };
 
 export interface MarkdownContributions {
-	readonly previewScripts: ReadonlyArray<vscode.Uri>;
-	readonly previewStyles: ReadonlyArray<vscode.Uri>;
-	readonly previewResourceRoots: ReadonlyArray<vscode.Uri>;
-	readonly markdownItPlugins: Map<string, Thenable<(md: any) => any>>;
+	readonly extensionPath: string;
+	readonly previewScripts: vscode.Uri[];
+	readonly previewStyles: vscode.Uri[];
+	readonly markdownItPlugins: Thenable<(md: any) => any>[];
+	readonly previewResourceRoots: vscode.Uri[];
 }
 
-export namespace MarkdownContributions {
-	export const Empty: MarkdownContributions = {
-		previewScripts: [],
-		previewStyles: [],
-		previewResourceRoots: [],
-		markdownItPlugins: new Map()
-	};
+class MarkdownExtensionContributions implements MarkdownContributions {
+	private readonly _scripts: vscode.Uri[] = [];
+	private readonly _styles: vscode.Uri[] = [];
+	private readonly _previewResourceRoots: vscode.Uri[] = [];
+	private readonly _plugins: Thenable<(md: any) => any>[] = [];
 
-	export function merge(a: MarkdownContributions, b: MarkdownContributions): MarkdownContributions {
-		return {
-			previewScripts: [...a.previewScripts, ...b.previewScripts],
-			previewStyles: [...a.previewStyles, ...b.previewStyles],
-			previewResourceRoots: [...a.previewResourceRoots, ...b.previewResourceRoots],
-			markdownItPlugins: new Map([...a.markdownItPlugins.entries(), ...b.markdownItPlugins.entries()]),
-		};
+	private _loaded = false;
+
+	public constructor(
+		public readonly extensionPath: string,
+	) { }
+
+	public get previewScripts(): vscode.Uri[] {
+		this.ensureLoaded();
+		return this._scripts;
 	}
 
-	function uriEqual(a: vscode.Uri, b: vscode.Uri): boolean {
-		return a.toString() === b.toString();
+	public get previewStyles(): vscode.Uri[] {
+		this.ensureLoaded();
+		return this._styles;
 	}
 
-	export function equal(a: MarkdownContributions, b: MarkdownContributions): boolean {
-		return arrays.equals(a.previewScripts, b.previewScripts, uriEqual)
-			&& arrays.equals(a.previewStyles, b.previewStyles, uriEqual)
-			&& arrays.equals(a.previewResourceRoots, b.previewResourceRoots, uriEqual)
-			&& arrays.equals(Array.from(a.markdownItPlugins.keys()), Array.from(b.markdownItPlugins.keys()));
+	public get previewResourceRoots(): vscode.Uri[] {
+		this.ensureLoaded();
+		return this._previewResourceRoots;
 	}
 
-	export function fromExtension(
-		extension: vscode.Extension<any>
-	): MarkdownContributions {
-		const contributions = extension.packageJSON && extension.packageJSON.contributes;
-		if (!contributions) {
-			return MarkdownContributions.Empty;
+	public get markdownItPlugins(): Thenable<(md: any) => any>[] {
+		this.ensureLoaded();
+		return this._plugins;
+	}
+
+	private ensureLoaded() {
+		if (this._loaded) {
+			return;
 		}
 
-		const previewStyles = getContributedStyles(contributions, extension);
-		const previewScripts = getContributedScripts(contributions, extension);
-		const previewResourceRoots = previewStyles.length || previewScripts.length ? [extension.extensionUri] : [];
-		const markdownItPlugins = getContributedMarkdownItPlugins(contributions, extension);
+		this._loaded = true;
+		for (const extension of vscode.extensions.all) {
+			const contributes = extension.packageJSON && extension.packageJSON.contributes;
+			if (!contributes) {
+				continue;
+			}
 
-		return {
-			previewScripts,
-			previewStyles,
-			previewResourceRoots,
-			markdownItPlugins
-		};
+			this.tryLoadPreviewStyles(contributes, extension);
+			this.tryLoadPreviewScripts(contributes, extension);
+			this.tryLoadMarkdownItPlugins(contributes, extension);
+
+			if (contributes['markdown.previewScripts'] || contributes['markdown.previewStyles']) {
+				this._previewResourceRoots.push(vscode.Uri.file(extension.extensionPath));
+			}
+		}
 	}
 
-	function getContributedMarkdownItPlugins(
+	private tryLoadMarkdownItPlugins(
 		contributes: any,
 		extension: vscode.Extension<any>
-	): Map<string, Thenable<(md: any) => any>> {
-		const map = new Map<string, Thenable<(md: any) => any>>();
+	) {
 		if (contributes['markdown.markdownItPlugins']) {
-			map.set(extension.id, extension.activate().then(() => {
+			this._plugins.push(extension.activate().then(() => {
 				if (extension.exports && extension.exports.extendMarkdownIt) {
 					return (md: any) => extension.exports.extendMarkdownIt(md);
 				}
 				return (md: any) => md;
 			}));
 		}
-		return map;
 	}
 
-	function getContributedScripts(
+	private tryLoadPreviewScripts(
 		contributes: any,
 		extension: vscode.Extension<any>
 	) {
-		return resolveExtensionResources(extension, contributes['markdown.previewScripts']);
+		this._scripts.push(...resolveExtensionResources(extension, contributes['markdown.previewScripts']));
 	}
 
-	function getContributedStyles(
+	private tryLoadPreviewStyles(
 		contributes: any,
 		extension: vscode.Extension<any>
 	) {
-		return resolveExtensionResources(extension, contributes['markdown.previewStyles']);
+		this._styles.push(...resolveExtensionResources(extension, contributes['markdown.previewStyles']));
 	}
 }
 
-export interface MarkdownContributionProvider {
-	readonly extensionUri: vscode.Uri;
-
-	readonly contributions: MarkdownContributions;
-	readonly onContributionsChanged: vscode.Event<this>;
-
-	dispose(): void;
-}
-
-class VSCodeExtensionMarkdownContributionProvider extends Disposable implements MarkdownContributionProvider {
-	private _contributions?: MarkdownContributions;
-
-	public constructor(
-		private readonly _extensionContext: vscode.ExtensionContext,
-	) {
-		super();
-
-		vscode.extensions.onDidChange(() => {
-			const currentContributions = this.getCurrentContributions();
-			const existingContributions = this._contributions || MarkdownContributions.Empty;
-			if (!MarkdownContributions.equal(existingContributions, currentContributions)) {
-				this._contributions = currentContributions;
-				this._onContributionsChanged.fire(this);
-			}
-		}, undefined, this._disposables);
-	}
-
-	public get extensionUri() { return this._extensionContext.extensionUri; }
-
-	private readonly _onContributionsChanged = this._register(new vscode.EventEmitter<this>());
-	public readonly onContributionsChanged = this._onContributionsChanged.event;
-
-	public get contributions(): MarkdownContributions {
-		if (!this._contributions) {
-			this._contributions = this.getCurrentContributions();
-		}
-		return this._contributions;
-	}
-
-	private getCurrentContributions(): MarkdownContributions {
-		return vscode.extensions.all
-			.map(MarkdownContributions.fromExtension)
-			.reduce(MarkdownContributions.merge, MarkdownContributions.Empty);
-	}
-}
-
-export function getMarkdownExtensionContributions(context: vscode.ExtensionContext): MarkdownContributionProvider {
-	return new VSCodeExtensionMarkdownContributionProvider(context);
+export function getMarkdownExtensionContributions(context: vscode.ExtensionContext): MarkdownContributions {
+	return new MarkdownExtensionContributions(context.extensionPath);
 }

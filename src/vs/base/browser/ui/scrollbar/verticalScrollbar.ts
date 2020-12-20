@@ -3,22 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { StandardWheelEvent } from 'vs/base/browser/mouseEvent';
-import { AbstractScrollbar, ISimplifiedMouseEvent, ScrollbarHost } from 'vs/base/browser/ui/scrollbar/abstractScrollbar';
+import { AbstractScrollbar, ScrollbarHost, ISimplifiedMouseEvent } from 'vs/base/browser/ui/scrollbar/abstractScrollbar';
+import { StandardMouseWheelEvent } from 'vs/base/browser/mouseEvent';
 import { ScrollableElementResolvedOptions } from 'vs/base/browser/ui/scrollbar/scrollableElementOptions';
-import { ARROW_IMG_SIZE } from 'vs/base/browser/ui/scrollbar/scrollbarArrow';
+import { Scrollable, ScrollEvent, ScrollbarVisibility, INewScrollPosition } from 'vs/base/common/scrollable';
 import { ScrollbarState } from 'vs/base/browser/ui/scrollbar/scrollbarState';
-import { INewScrollPosition, ScrollEvent, Scrollable, ScrollbarVisibility } from 'vs/base/common/scrollable';
-import { Codicon, registerCodicon } from 'vs/base/common/codicons';
-
-const scrollbarButtonUpIcon = registerCodicon('scrollbar-button-up', Codicon.triangleUp);
-const scrollbarButtonDownIcon = registerCodicon('scrollbar-button-down', Codicon.triangleDown);
+import { ARROW_IMG_SIZE } from 'vs/base/browser/ui/scrollbar/scrollbarArrow';
 
 export class VerticalScrollbar extends AbstractScrollbar {
 
 	constructor(scrollable: Scrollable, options: ScrollableElementResolvedOptions, host: ScrollbarHost) {
-		const scrollDimensions = scrollable.getScrollDimensions();
-		const scrollPosition = scrollable.getCurrentScrollPosition();
 		super({
 			lazyRender: options.lazyRender,
 			host: host,
@@ -26,15 +20,11 @@ export class VerticalScrollbar extends AbstractScrollbar {
 				(options.verticalHasArrows ? options.arrowSize : 0),
 				(options.vertical === ScrollbarVisibility.Hidden ? 0 : options.verticalScrollbarSize),
 				// give priority to vertical scroll bar over horizontal and let it scroll all the way to the bottom
-				0,
-				scrollDimensions.height,
-				scrollDimensions.scrollHeight,
-				scrollPosition.scrollTop
+				0
 			),
 			visibility: options.vertical,
 			extraScrollbarClassName: 'vertical',
-			scrollable: scrollable,
-			scrollByPage: options.scrollByPage
+			scrollable: scrollable
 		});
 
 		if (options.verticalHasArrows) {
@@ -42,27 +32,25 @@ export class VerticalScrollbar extends AbstractScrollbar {
 			let scrollbarDelta = (options.verticalScrollbarSize - ARROW_IMG_SIZE) / 2;
 
 			this._createArrow({
-				className: 'scra',
-				icon: scrollbarButtonUpIcon,
+				className: 'up-arrow',
 				top: arrowDelta,
 				left: scrollbarDelta,
-				bottom: undefined,
-				right: undefined,
+				bottom: void 0,
+				right: void 0,
 				bgWidth: options.verticalScrollbarSize,
 				bgHeight: options.arrowSize,
-				onActivate: () => this._host.onMouseWheel(new StandardWheelEvent(null, 0, 1)),
+				onActivate: () => this._host.onMouseWheel(new StandardMouseWheelEvent(null, 0, 1)),
 			});
 
 			this._createArrow({
-				className: 'scra',
-				icon: scrollbarButtonDownIcon,
-				top: undefined,
+				className: 'down-arrow',
+				top: void 0,
 				left: scrollbarDelta,
 				bottom: arrowDelta,
-				right: undefined,
+				right: void 0,
 				bgWidth: options.verticalScrollbarSize,
 				bgHeight: options.arrowSize,
-				onActivate: () => this._host.onMouseWheel(new StandardWheelEvent(null, 0, -1)),
+				onActivate: () => this._host.onMouseWheel(new StandardMouseWheelEvent(null, 0, -1)),
 			});
 		}
 
@@ -98,10 +86,6 @@ export class VerticalScrollbar extends AbstractScrollbar {
 
 	protected _sliderOrthogonalMousePosition(e: ISimplifiedMouseEvent): number {
 		return e.posx;
-	}
-
-	protected _updateScrollbarSize(size: number): void {
-		this.slider.setWidth(size);
 	}
 
 	public writeScrollPosition(target: INewScrollPosition, scrollPosition: number): void {

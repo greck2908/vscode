@@ -4,17 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationToken } from 'vs/base/common/cancellation';
-import * as pfs from 'vs/base/node/pfs';
-import { IFileMatch, IProgressMessage, ITextQuery, ITextSearchStats, ITextSearchMatch, ISerializedFileMatch, ISerializedSearchSuccess } from 'vs/workbench/services/search/common/search';
+import * as extfs from 'vs/base/node/extfs';
+import { IFileMatch, IProgress, ITextQuery, ITextSearchStats } from 'vs/platform/search/common/search';
 import { RipgrepTextSearchEngine } from 'vs/workbench/services/search/node/ripgrepTextSearchEngine';
-import { NativeTextSearchManager } from 'vs/workbench/services/search/node/textSearchManager';
+import { TextSearchManager } from 'vs/workbench/services/search/node/textSearchManager';
+import { ISerializedFileMatch, ISerializedSearchSuccess } from './search';
 
 export class TextSearchEngineAdapter {
 
-	constructor(private query: ITextQuery) { }
+	constructor(private query: ITextQuery) {
+	}
 
-	search(token: CancellationToken, onResult: (matches: ISerializedFileMatch[]) => void, onMessage: (message: IProgressMessage) => void): Promise<ISerializedSearchSuccess> {
-		if ((!this.query.folderQueries || !this.query.folderQueries.length) && (!this.query.extraFileResources || !this.query.extraFileResources.length)) {
+	search(token: CancellationToken, onResult: (matches: ISerializedFileMatch[]) => void, onMessage: (message: IProgress) => void): Promise<ISerializedSearchSuccess> {
+		if (!this.query.folderQueries.length && !this.query.extraFileResources.length) {
 			return Promise.resolve(<ISerializedSearchSuccess>{
 				type: 'success',
 				limitHit: false,
@@ -25,11 +27,11 @@ export class TextSearchEngineAdapter {
 		}
 
 		const pretendOutputChannel = {
-			appendLine(msg: string) {
+			appendLine(msg) {
 				onMessage({ message: msg });
 			}
 		};
-		const textSearchManager = new NativeTextSearchManager(this.query, new RipgrepTextSearchEngine(pretendOutputChannel), pfs);
+		const textSearchManager = new TextSearchManager(this.query, new RipgrepTextSearchEngine(pretendOutputChannel), extfs);
 		return new Promise((resolve, reject) => {
 			return textSearchManager
 				.search(
@@ -38,7 +40,7 @@ export class TextSearchEngineAdapter {
 					},
 					token)
 				.then(
-					c => resolve({ limitHit: c.limitHit, type: 'success' } as ISerializedSearchSuccess),
+					() => resolve({ limitHit: false, stats: null, type: 'success' }),
 					reject);
 		});
 	}
@@ -46,15 +48,8 @@ export class TextSearchEngineAdapter {
 
 function fileMatchToSerialized(match: IFileMatch): ISerializedFileMatch {
 	return {
-		path: match.resource && match.resource.fsPath,
-		results: match.results,
-		numMatches: (match.results || []).reduce((sum, r) => {
-			if (!!(<ITextSearchMatch>r).ranges) {
-				const m = <ITextSearchMatch>r;
-				return sum + (Array.isArray(m.ranges) ? m.ranges.length : 1);
-			} else {
-				return sum + 1;
-			}
-		}, 0)
+		path: match.resource.fsPath,
+		matches: match.matches,
+		numMatches: match.matches.length
 	};
 }

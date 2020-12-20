@@ -4,7 +4,6 @@
   "description": "%description%",
   "version": "1.0.0",
   "publisher": "vscode",
-  "license": "MIT",
   "engines": {
     "vscode": "^1.0.0"
   },
@@ -12,15 +11,14 @@
     "onLanguage:json",
     "onLanguage:jsonc"
   ],
-  "main": "./out/configurationEditingMain",
-  "browser": "./dist/browser/configurationEditingMain",
+  "main": "./out/extension",
   "scripts": {
     "compile": "gulp compile-extension:configuration-editing",
     "watch": "gulp watch-extension:configuration-editing"
   },
   "dependencies": {
-    "jsonc-parser": "^2.2.1",
-    "vscode-nls": "^4.1.1"
+    "jsonc-parser": "2.0.2",
+    "vscode-nls": "^4.0.0"
   },
   "contributes": {
     "languages": [
@@ -38,9 +36,7 @@
           "launch.json",
           "tasks.json",
           "keybindings.json",
-          "extensions.json",
-          "argv.json",
-          "profiles.json"
+          "extensions.json"
         ]
       }
     ],
@@ -54,16 +50,12 @@
         "url": "vscode://schemas/keybindings"
       },
       {
-        "fileMatch": "vscode://defaultsettings/*.json",
+        "fileMatch": "vscode://defaultsettings/settings.json",
         "url": "vscode://schemas/settings/default"
       },
       {
         "fileMatch": "%APP_SETTINGS_HOME%/settings.json",
         "url": "vscode://schemas/settings/user"
-      },
-      {
-        "fileMatch": "%MACHINE_SETTINGS_HOME%/settings.json",
-        "url": "vscode://schemas/settings/machine"
       },
       {
         "fileMatch": "%APP_WORKSPACES_HOME%/*/workspace.json",
@@ -74,8 +66,8 @@
         "url": "vscode://schemas/workspaceConfig"
       },
       {
-        "fileMatch": "**/argv.json",
-        "url": "vscode://schemas/argv"
+        "fileMatch": "%APP_SETTINGS_HOME%/locale.json",
+        "url": "vscode://schemas/locale"
       },
       {
         "fileMatch": "/.vscode/settings.json",
@@ -90,15 +82,7 @@
         "url": "vscode://schemas/tasks"
       },
       {
-        "fileMatch": "%APP_SETTINGS_HOME%/tasks.json",
-        "url": "vscode://schemas/tasks"
-      },
-      {
         "fileMatch": "%APP_SETTINGS_HOME%/snippets/*.json",
-        "url": "vscode://schemas/snippets"
-      },
-      {
-        "fileMatch": "%APP_SETTINGS_HOME%/sync/snippets/preview/*.json",
         "url": "vscode://schemas/snippets"
       },
       {
@@ -108,26 +92,10 @@
       {
         "fileMatch": "/.vscode/extensions.json",
         "url": "vscode://schemas/extensions"
-      },
-      {
-        "fileMatch": "/.devcontainer/devcontainer.json",
-        "url": "./schemas/devContainer.schema.generated.json"
-      },
-      {
-        "fileMatch": "/.devcontainer.json",
-        "url": "./schemas/devContainer.schema.generated.json"
-      },
-      {
-        "fileMatch": "%APP_SETTINGS_HOME%/globalStorage/ms-vscode-remote.remote-containers/nameConfigs/*.json",
-        "url": "./schemas/attachContainer.schema.json"
-      },
-      {
-        "fileMatch": "%APP_SETTINGS_HOME%/globalStorage/ms-vscode-remote.remote-containers/imageConfigs/*.json",
-        "url": "./schemas/attachContainer.schema.json"
       }
     ]
   },
   "devDependencies": {
-    "@types/node": "^12.19.9"
+    "@types/node": "^8.10.25"
   }
 }

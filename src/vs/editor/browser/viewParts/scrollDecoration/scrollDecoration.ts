@@ -6,17 +6,15 @@
 import 'vs/css!./scrollDecoration';
 import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
 import { ViewPart } from 'vs/editor/browser/view/viewPart';
-import { RenderingContext, RestrictedRenderingContext } from 'vs/editor/common/view/renderingContext';
 import { ViewContext } from 'vs/editor/common/view/viewContext';
+import { RenderingContext, RestrictedRenderingContext } from 'vs/editor/common/view/renderingContext';
 import * as viewEvents from 'vs/editor/common/view/viewEvents';
-import { scrollbarShadow } from 'vs/platform/theme/common/colorRegistry';
 import { registerThemingParticipant } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
-
+import { scrollbarShadow } from 'vs/platform/theme/common/colorRegistry';
 
 export class ScrollDecorationViewPart extends ViewPart {
 
-	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _domNode: FastDomNode<HTMLElement>;
 	private _scrollTop: number;
 	private _width: number;
 	private _shouldShow: boolean;
@@ -29,9 +27,7 @@ export class ScrollDecorationViewPart extends ViewPart {
 		this._width = 0;
 		this._updateWidth();
 		this._shouldShow = false;
-		const options = this._context.configuration.options;
-		const scrollbar = options.get(EditorOption.scrollbar);
-		this._useShadows = scrollbar.useShadows;
+		this._useShadows = this._context.configuration.editor.viewInfo.scrollbar.useShadows;
 		this._domNode = createFastDomNode(document.createElement('div'));
 		this._domNode.setAttribute('role', 'presentation');
 		this._domNode.setAttribute('aria-hidden', 'true');
@@ -42,7 +38,7 @@ export class ScrollDecorationViewPart extends ViewPart {
 	}
 
 	private _updateShouldShow(): boolean {
-		const newShouldShow = (this._useShadows && this._scrollTop > 0);
+		let newShouldShow = (this._useShadows && this._scrollTop > 0);
 		if (this._shouldShow !== newShouldShow) {
 			this._shouldShow = newShouldShow;
 			return true;
@@ -54,26 +50,32 @@ export class ScrollDecorationViewPart extends ViewPart {
 		return this._domNode;
 	}
 
-	private _updateWidth(): void {
-		const options = this._context.configuration.options;
-		const layoutInfo = options.get(EditorOption.layoutInfo);
-
-		if (layoutInfo.minimap.renderMinimap === 0 || (layoutInfo.minimap.minimapWidth > 0 && layoutInfo.minimap.minimapLeft === 0)) {
-			this._width = layoutInfo.width;
+	private _updateWidth(): boolean {
+		const layoutInfo = this._context.configuration.editor.layoutInfo;
+		let newWidth = 0;
+		if (layoutInfo.renderMinimap === 0 || (layoutInfo.minimapWidth > 0 && layoutInfo.minimapLeft === 0)) {
+			newWidth = layoutInfo.width;
 		} else {
-			this._width = layoutInfo.width - layoutInfo.minimap.minimapWidth - layoutInfo.verticalScrollbarWidth;
+			newWidth = layoutInfo.width - layoutInfo.minimapWidth - layoutInfo.verticalScrollbarWidth;
 		}
+		if (this._width !== newWidth) {
+			this._width = newWidth;
+			return true;
+		}
+		return false;
 	}
 
 	// --- begin event handlers
 
 	public onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		const options = this._context.configuration.options;
-		const scrollbar = options.get(EditorOption.scrollbar);
-		this._useShadows = scrollbar.useShadows;
-		this._updateWidth();
-		this._updateShouldShow();
-		return true;
+		let shouldRender = false;
+		if (e.viewInfo) {
+			this._useShadows = this._context.configuration.editor.viewInfo.scrollbar.useShadows;
+		}
+		if (e.layoutInfo) {
+			shouldRender = this._updateWidth();
+		}
+		return this._updateShouldShow() || shouldRender;
 	}
 	public onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
 		this._scrollTop = e.scrollTop;

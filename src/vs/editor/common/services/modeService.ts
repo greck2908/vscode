@@ -4,10 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from 'vs/base/common/event';
-import { IDisposable } from 'vs/base/common/lifecycle';
-import { URI } from 'vs/base/common/uri';
-import { IMode, LanguageId, LanguageIdentifier } from 'vs/editor/common/modes';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { IMode, LanguageId, LanguageIdentifier } from 'vs/editor/common/modes';
+import { URI } from 'vs/base/common/uri';
 
 export const IModeService = createDecorator<IModeService>('modeService');
 
@@ -22,16 +21,10 @@ export interface ILanguageExtensionPoint {
 	configuration?: URI;
 }
 
-export interface ILanguageSelection extends IDisposable {
-	readonly languageIdentifier: LanguageIdentifier;
-	readonly onDidChange: Event<LanguageIdentifier>;
-}
-
 export interface IModeService {
-	readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
 	onDidCreateMode: Event<IMode>;
-	onLanguagesMaybeChanged: Event<void>;
 
 	// --- reading
 	isRegisteredMode(mimetypeOrModeId: string): boolean;
@@ -42,15 +35,14 @@ export interface IModeService {
 	getMimeForMode(modeId: string): string | null;
 	getLanguageName(modeId: string): string | null;
 	getModeIdForLanguageName(alias: string): string | null;
-	getModeIdByFilepathOrFirstLine(resource: URI, firstLine?: string): string | null;
+	getModeIdByFilepathOrFirstLine(filepath: string, firstLine?: string): string | null;
 	getModeId(commaSeparatedMimetypesOrCommaSeparatedIds: string): string | null;
 	getLanguageIdentifier(modeId: string | LanguageId): LanguageIdentifier | null;
 	getConfigurationFiles(modeId: string): URI[];
 
 	// --- instantiation
-	create(commaSeparatedMimetypesOrCommaSeparatedIds: string | undefined): ILanguageSelection;
-	createByLanguageName(languageName: string): ILanguageSelection;
-	createByFilepathOrFirstLine(rsource: URI | null, firstLine?: string): ILanguageSelection;
-
-	triggerMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): void;
+	getMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): IMode | null;
+	getOrCreateMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): Promise<IMode>;
+	getOrCreateModeByLanguageName(languageName: string): Promise<IMode>;
+	getOrCreateModeByFilepathOrFirstLine(filepath: string, firstLine?: string): Promise<IMode>;
 }

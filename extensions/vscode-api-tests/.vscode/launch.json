@@ -6,15 +6,11 @@
 			"name": "Launch Tests",
 			"type": "extensionHost",
 			"request": "launch",
-			"args": [
-				"${workspaceFolder}/../../",
-				"${workspaceFolder}/testWorkspace",
-				"--extensionDevelopmentPath=${workspaceFolder}",
-				"--extensionTestsPath=${workspaceFolder}/out"
-			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
-			],
+			"runtimeExecutable": "${execPath}",
+			"args": ["${workspaceFolder}/../../", "${workspaceFolder}/testWorkspace", "--extensionDevelopmentPath=${workspaceFolder}", "--extensionTestsPath=${workspaceFolder}/out" ],
+			"stopOnEntry": false,
+			"sourceMaps": true,
+			"outDir": "out",
 			"preLaunchTask": "npm"
 		}
 	]

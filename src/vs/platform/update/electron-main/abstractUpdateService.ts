@@ -4,34 +4,32 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event, Emitter } from 'vs/base/common/event';
-import { timeout } from 'vs/base/common/async';
-import { IConfigurationService, getMigratedSettingValue } from 'vs/platform/configuration/common/configuration';
-import { ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
-import product from 'vs/platform/product/common/product';
+import { Throttler, timeout } from 'vs/base/common/async';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
+import product from 'vs/platform/node/product';
+import { TPromise } from 'vs/base/common/winjs.base';
 import { IUpdateService, State, StateType, AvailableForDownload, UpdateType } from 'vs/platform/update/common/update';
-import { IEnvironmentMainService } from 'vs/platform/environment/electron-main/environmentMainService';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ILogService } from 'vs/platform/log/common/log';
-import { IRequestService } from 'vs/platform/request/common/request';
+import { IRequestService } from 'vs/platform/request/node/request';
 import { CancellationToken } from 'vs/base/common/cancellation';
 
 export function createUpdateURL(platform: string, quality: string): string {
 	return `${product.updateUrl}/api/update/${platform}/${quality}/${product.commit}`;
 }
 
-export type UpdateNotAvailableClassification = {
-	explicit: { classification: 'SystemMetaData', purpose: 'FeatureInsight', isMeasurement: true };
-};
-
 export abstract class AbstractUpdateService implements IUpdateService {
 
-	declare readonly _serviceBrand: undefined;
+	_serviceBrand: any;
 
-	protected url: string | undefined;
+	protected readonly url: string | undefined;
 
 	private _state: State = State.Uninitialized;
+	private throttler: Throttler = new Throttler();
 
-	private readonly _onStateChange = new Emitter<State>();
-	readonly onStateChange: Event<State> = this._onStateChange.event;
+	private _onStateChange = new Emitter<State>();
+	get onStateChange(): Event<State> { return this._onStateChange.event; }
 
 	get state(): State {
 		return this._state;
@@ -44,70 +42,47 @@ export abstract class AbstractUpdateService implements IUpdateService {
 	}
 
 	constructor(
-		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
+		@ILifecycleService private lifecycleService: ILifecycleService,
 		@IConfigurationService protected configurationService: IConfigurationService,
-		@IEnvironmentMainService private readonly environmentService: IEnvironmentMainService,
+		@IEnvironmentService private environmentService: IEnvironmentService,
 		@IRequestService protected requestService: IRequestService,
 		@ILogService protected logService: ILogService,
-	) { }
-
-	/**
-	 * This must be called before any other call. This is a performance
-	 * optimization, to avoid using extra CPU cycles before first window open.
-	 * https://github.com/microsoft/vscode/issues/89784
-	 */
-	initialize(): void {
-		if (!this.environmentService.isBuilt) {
-			return; // updates are never enabled when running out of sources
-		}
-
+	) {
 		if (this.environmentService.disableUpdates) {
-			this.logService.info('update#ctor - updates are disabled by the environment');
+			this.logService.info('update#ctor - updates are disabled');
 			return;
 		}
 
 		if (!product.updateUrl || !product.commit) {
-			this.logService.info('update#ctor - updates are disabled as there is no update URL');
+			this.logService.info('update#ctor - updates are disabled');
 			return;
 		}
 
-		const updateMode = getMigratedSettingValue<string>(this.configurationService, 'update.mode', 'update.channel');
-		const quality = this.getProductQuality(updateMode);
+		const quality = this.getProductQuality();
 
 		if (!quality) {
-			this.logService.info('update#ctor - updates are disabled by user preference');
+			this.logService.info('update#ctor - updates are disabled');
 			return;
 		}
 
 		this.url = this.buildUpdateFeedUrl(quality);
 		if (!this.url) {
-			this.logService.info('update#ctor - updates are disabled as the update URL is badly formed');
+			this.logService.info('update#ctor - updates are disabled');
 			return;
 		}
 
 		this.setState(State.Idle(this.getUpdateType()));
 
-		if (updateMode === 'manual') {
-			this.logService.info('update#ctor - manual checks only; automatic updates are disabled by user preference');
-			return;
-		}
-
-		if (updateMode === 'start') {
-			this.logService.info('update#ctor - startup checks only; automatic updates are disabled by user preference');
-
-			// Check for updates only once after 30 seconds
-			setTimeout(() => this.checkForUpdates(null), 30 * 1000);
-		} else {
-			// Start checking for updates after 30 seconds
-			this.scheduleCheckForUpdates(30 * 1000).then(undefined, err => this.logService.error(err));
-		}
+		// Start checking for updates after 30 seconds
+		this.scheduleCheckForUpdates(30 * 1000).then(null, err => this.logService.error(err));
 	}
 
-	private getProductQuality(updateMode: string): string | undefined {
-		return updateMode === 'none' ? undefined : product.quality;
+	private getProductQuality(): string {
+		const quality = this.configurationService.getValue<string>('update.channel');
+		return quality === 'none' ? null : product.quality;
 	}
 
-	private scheduleCheckForUpdates(delay = 60 * 60 * 1000): Promise<void> {
+	private scheduleCheckForUpdates(delay = 60 * 60 * 1000): Thenable<void> {
 		return timeout(delay)
 			.then(() => this.checkForUpdates(null))
 			.then(() => {
@@ -116,54 +91,54 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			});
 	}
 
-	async checkForUpdates(context: any): Promise<void> {
+	checkForUpdates(context: any): TPromise<void> {
 		this.logService.trace('update#checkForUpdates, state = ', this.state.type);
 
 		if (this.state.type !== StateType.Idle) {
-			return;
+			return TPromise.as(null);
 		}
 
-		this.doCheckForUpdates(context);
+		return this.throttler.queue(() => TPromise.as(this.doCheckForUpdates(context)));
 	}
 
-	async downloadUpdate(): Promise<void> {
+	downloadUpdate(): TPromise<void> {
 		this.logService.trace('update#downloadUpdate, state = ', this.state.type);
 
 		if (this.state.type !== StateType.AvailableForDownload) {
-			return;
+			return TPromise.as(null);
 		}
 
-		await this.doDownloadUpdate(this.state);
+		return this.doDownloadUpdate(this.state);
 	}
 
-	protected async doDownloadUpdate(state: AvailableForDownload): Promise<void> {
-		// noop
+	protected doDownloadUpdate(state: AvailableForDownload): TPromise<void> {
+		return TPromise.as(null);
 	}
 
-	async applyUpdate(): Promise<void> {
+	applyUpdate(): TPromise<void> {
 		this.logService.trace('update#applyUpdate, state = ', this.state.type);
 
 		if (this.state.type !== StateType.Downloaded) {
-			return;
+			return TPromise.as(null);
 		}
 
-		await this.doApplyUpdate();
+		return this.doApplyUpdate();
 	}
 
-	protected async doApplyUpdate(): Promise<void> {
-		// noop
+	protected doApplyUpdate(): TPromise<void> {
+		return TPromise.as(null);
 	}
 
-	quitAndInstall(): Promise<void> {
+	quitAndInstall(): TPromise<void> {
 		this.logService.trace('update#quitAndInstall, state = ', this.state.type);
 
 		if (this.state.type !== StateType.Ready) {
-			return Promise.resolve(undefined);
+			return TPromise.as(null);
 		}
 
 		this.logService.trace('update#quitAndInstall(): before lifecycle quit()');
 
-		this.lifecycleMainService.quit(true /* from update */).then(vetod => {
+		this.lifecycleService.quit(true /* from update */).then(vetod => {
 			this.logService.trace(`update#quitAndInstall(): after lifecycle quit() with veto: ${vetod}`);
 			if (vetod) {
 				return;
@@ -173,14 +148,13 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			this.doQuitAndInstall();
 		});
 
-		return Promise.resolve(undefined);
+		return TPromise.as(null);
 	}
 
-	isLatestVersion(): Promise<boolean | undefined> {
+	isLatestVersion(): TPromise<boolean | undefined> {
 		if (!this.url) {
-			return Promise.resolve(undefined);
+			return TPromise.as(undefined);
 		}
-
 		return this.requestService.request({ url: this.url }, CancellationToken.None).then(context => {
 			// The update server replies with 204 (No Content) when no
 			// update is available - that's all we want to know.

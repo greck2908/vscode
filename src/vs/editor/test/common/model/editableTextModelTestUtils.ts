@@ -4,12 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as assert from 'assert';
-import { Position } from 'vs/editor/common/core/position';
-import { EndOfLinePreference, EndOfLineSequence, IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
-import { MirrorTextModel } from 'vs/editor/common/model/mirrorTextModel';
 import { TextModel } from 'vs/editor/common/model/textModel';
+import { MirrorTextModel } from 'vs/editor/common/model/mirrorTextModel';
+import { Position } from 'vs/editor/common/core/position';
 import { IModelContentChangedEvent } from 'vs/editor/common/model/textModelEvents';
-import { createTextModel } from 'vs/editor/test/common/editorTestUtils';
+import { EndOfLinePreference, IIdentifiedSingleEditOperation, EndOfLineSequence } from 'vs/editor/common/model';
 
 export function testApplyEditsWithSyncedModels(original: string[], edits: IIdentifiedSingleEditOperation[], expected: string[], inputEditsAreInvalid: boolean = false): void {
 	let originalStr = original.join('\n');
@@ -17,7 +16,7 @@ export function testApplyEditsWithSyncedModels(original: string[], edits: IIdent
 
 	assertSyncedModels(originalStr, (model, assertMirrorModels) => {
 		// Apply edits & collect inverse edits
-		let inverseEdits = model.applyEdits(edits, true);
+		let inverseEdits = model.applyEdits(edits);
 
 		// Assert edits produced expected result
 		assert.deepEqual(model.getValue(EndOfLinePreference.LF), expectedStr);
@@ -25,7 +24,7 @@ export function testApplyEditsWithSyncedModels(original: string[], edits: IIdent
 		assertMirrorModels();
 
 		// Apply the inverse edits
-		let inverseInverseEdits = model.applyEdits(inverseEdits, true);
+		let inverseInverseEdits = model.applyEdits(inverseEdits);
 
 		// Assert the inverse edits brought back model to original state
 		assert.deepEqual(model.getValue(EndOfLinePreference.LF), originalStr);
@@ -36,8 +35,8 @@ export function testApplyEditsWithSyncedModels(original: string[], edits: IIdent
 					identifier: edit.identifier,
 					range: edit.range,
 					text: edit.text,
-					forceMoveMarkers: edit.forceMoveMarkers || false,
-					isAutoWhitespaceEdit: edit.isAutoWhitespaceEdit || false
+					forceMoveMarkers: edit.forceMoveMarkers,
+					isAutoWhitespaceEdit: edit.isAutoWhitespaceEdit
 				};
 			};
 			// Assert the inverse of the inverse edits are the original edits
@@ -89,7 +88,7 @@ function assertLineMapping(model: TextModel, msg: string): void {
 
 
 export function assertSyncedModels(text: string, callback: (model: TextModel, assertMirrorModels: () => void) => void, setup: ((model: TextModel) => void) | null = null): void {
-	let model = createTextModel(text, TextModel.DEFAULT_CREATION_OPTIONS, null);
+	let model = new TextModel(text, TextModel.DEFAULT_CREATION_OPTIONS, null);
 	model.setEOL(EndOfLineSequence.LF);
 	assertLineMapping(model, 'model');
 

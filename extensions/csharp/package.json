@@ -4,7 +4,6 @@
 	"description": "%description%",
   "version": "1.0.0",
   "publisher": "vscode",
-  "license": "MIT",
   "engines": {
     "vscode": "0.10.x"
   },
@@ -37,7 +36,7 @@
     ],
 		"snippets": [{
 			"language": "csharp",
-			"path": "./snippets/csharp.code-snippets"
+			"path": "./snippets/csharp.json"
 		}]
   }
 }

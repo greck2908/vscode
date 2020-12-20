@@ -2,15 +2,13 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 import * as assert from 'assert';
+import { EditorSimpleWorkerImpl, ICommonModel } from 'vs/editor/common/services/editorSimpleWorker';
 import { Range } from 'vs/editor/common/core/range';
-import { EditorSimpleWorker, ICommonModel } from 'vs/editor/common/services/editorSimpleWorker';
-import { EditorWorkerHost } from 'vs/editor/common/services/editorWorkerServiceImpl';
 
 suite('EditorSimpleWorker', () => {
 
-	class WorkerWithModels extends EditorSimpleWorker {
+	class WorkerWithModels extends EditorSimpleWorkerImpl {
 
 		getModel(uri: string) {
 			return this._getModel(uri);
@@ -32,7 +30,7 @@ suite('EditorSimpleWorker', () => {
 	let model: ICommonModel;
 
 	setup(() => {
-		worker = new WorkerWithModels(<EditorWorkerHost>null!, null);
+		worker = new WorkerWithModels(null);
 		model = worker.addModel([
 			'This is line one', //16
 			'and this is line number two', //27
@@ -162,13 +160,10 @@ suite('EditorSimpleWorker', () => {
 			'f f'	// 2
 		]);
 
-		return worker.textualSuggest([model.uri.toString()], 'f', '[a-z]+', 'img').then((result) => {
-			if (!result) {
-				assert.ok(false);
-			}
-			assert.equal(result.words.length, 1);
-			assert.equal(typeof result.duration, 'number');
-			assert.equal(result.words[0], 'foobar');
+		return worker.textualSuggest(model.uri.toString(), { lineNumber: 2, column: 2 }, '[a-z]+', 'img').then((result) => {
+			const { suggestions } = result;
+			assert.equal(suggestions.length, 1);
+			assert.equal(suggestions[0].label, 'foobar');
 		});
 	});
 
@@ -184,7 +179,11 @@ suite('EditorSimpleWorker', () => {
 			'and now we are done'
 		]);
 
-		let words: string[] = [...model.words(/[a-z]+/img)];
+		let words: string[] = [];
+
+		for (let iter = model.createWordIterator(/[a-z]+/img), e = iter.next(); !e.done; e = iter.next()) {
+			words.push(e.value);
+		}
 
 		assert.deepEqual(words, ['one', 'line', 'two', 'line', 'past', 'empty', 'single', 'and', 'now', 'we', 'are', 'done']);
 	});

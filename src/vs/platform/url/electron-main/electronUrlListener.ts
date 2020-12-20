@@ -3,16 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Event } from 'vs/base/common/event';
-import { IEnvironmentMainService } from 'vs/platform/environment/electron-main/environmentMainService';
+import { mapEvent, fromNodeEventEmitter, filterEvent, once } from 'vs/base/common/event';
 import { IURLService } from 'vs/platform/url/common/url';
-import product from 'vs/platform/product/common/product';
-import { app, Event as ElectronEvent } from 'electron';
+import product from 'vs/platform/node/product';
+import { app } from 'electron';
 import { URI } from 'vs/base/common/uri';
-import { IDisposable, DisposableStore, Disposable } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { IWindowsMainService } from 'vs/platform/windows/electron-main/windows';
-import { isWindows } from 'vs/base/common/platform';
-import { disposableTimeout } from 'vs/base/common/async';
+import { ReadyState } from 'vs/platform/windows/common/windows';
 
 function uriFromRawUrl(url: string): URI | null {
 	try {
@@ -22,95 +20,49 @@ function uriFromRawUrl(url: string): URI | null {
 	}
 }
 
-/**
- * A listener for URLs that are opened from the OS and handled by VSCode.
- * Depending on the platform, this works differently:
- * - Windows: we use `app.setAsDefaultProtocolClient()` to register VSCode with the OS
- *            and additionally add the `open-url` command line argument to identify.
- * - macOS:   we rely on `app.on('open-url')` to be called by the OS
- * - Linux:   we have a special shortcut installed (`resources/linux/code-url-handler.desktop`)
- *            that calls VSCode with the `open-url` command line argument
- *            (https://github.com/microsoft/vscode/pull/56727)
- */
 export class ElectronURLListener {
 
-	private uris: { uri: URI, url: string }[] = [];
-	private retryCount = 0;
-	private flushDisposable: IDisposable = Disposable.None;
-	private disposables = new DisposableStore();
+	private disposables: IDisposable[] = [];
 
 	constructor(
-		initialUrisToHandle: { uri: URI, url: string }[],
-		private readonly urlService: IURLService,
-		windowsMainService: IWindowsMainService,
-		environmentService: IEnvironmentMainService
+		initial: string | string[],
+		@IURLService private urlService: IURLService,
+		@IWindowsMainService windowsService: IWindowsMainService
 	) {
+		const globalBuffer = ((<any>global).getOpenUrls() || []) as string[];
+		const rawBuffer = [
+			...(typeof initial === 'string' ? [initial] : initial),
+			...globalBuffer
+		];
 
-		// the initial set of URIs we need to handle once the window is ready
-		this.uris = initialUrisToHandle;
+		const buffer = rawBuffer.map(uriFromRawUrl).filter(uri => !!uri);
+		const flush = () => buffer.forEach(uri => urlService.open(uri));
 
-		// Windows: install as protocol handler
-		if (isWindows) {
-			const windowsParameters = environmentService.isBuilt ? [] : [`"${environmentService.appRoot}"`];
-			windowsParameters.push('--open-url', '--');
-			app.setAsDefaultProtocolClient(product.urlProtocol, process.execPath, windowsParameters);
-		}
+		app.setAsDefaultProtocolClient(product.urlProtocol, process.execPath, ['--open-url', '--']);
 
-		// macOS: listen to `open-url` events from here on to handle
-		const onOpenElectronUrl = Event.map(
-			Event.fromNodeEventEmitter(app, 'open-url', (event: ElectronEvent, url: string) => ({ event, url })),
+		const onOpenElectronUrl = mapEvent(
+			fromNodeEventEmitter(app, 'open-url', (event: Electron.Event, url: string) => ({ event, url })),
 			({ event, url }) => {
-				event.preventDefault(); // always prevent default and return the url as string
+				// always prevent default and return the url as string
+				event.preventDefault();
 				return url;
 			});
 
-		this.disposables.add(onOpenElectronUrl(url => {
-			const uri = uriFromRawUrl(url);
+		const onOpenUrl = filterEvent(mapEvent(onOpenElectronUrl, uriFromRawUrl), uri => !!uri);
+		onOpenUrl(this.urlService.open, this.urlService, this.disposables);
 
-			if (!uri) {
-				return;
-			}
-
-			this.urlService.open(uri, { originalUrl: url });
-		}));
-
-		// Send initial links to the window once it has loaded
-		const isWindowReady = windowsMainService.getWindows()
-			.filter(w => w.isReady)
+		const isWindowReady = windowsService.getWindows()
+			.filter(w => w.readyState === ReadyState.READY)
 			.length > 0;
 
 		if (isWindowReady) {
-			this.flush();
+			flush();
 		} else {
-			Event.once(windowsMainService.onWindowReady)(this.flush, this, this.disposables);
+			once(windowsService.onWindowReady)(flush);
 		}
-	}
-
-	private async flush(): Promise<void> {
-		if (this.retryCount++ > 10) {
-			return;
-		}
-
-		const uris: { uri: URI, url: string }[] = [];
-
-		for (const obj of this.uris) {
-			const handled = await this.urlService.open(obj.uri, { originalUrl: obj.url });
-
-			if (!handled) {
-				uris.push(obj);
-			}
-		}
-
-		if (uris.length === 0) {
-			return;
-		}
-
-		this.uris = uris;
-		this.flushDisposable = disposableTimeout(() => this.flush(), 500);
 	}
 
 	dispose(): void {
-		this.disposables.dispose();
-		this.flushDisposable.dispose();
+		this.disposables = dispose(this.disposables);
 	}
 }

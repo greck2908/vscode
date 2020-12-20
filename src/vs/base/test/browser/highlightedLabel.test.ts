@@ -9,7 +9,12 @@ suite('HighlightedLabel', () => {
 	let label: HighlightedLabel;
 
 	setup(() => {
-		label = new HighlightedLabel(document.createElement('div'), true);
+		label = new HighlightedLabel(document.createElement('div'));
+	});
+
+	teardown(() => {
+		label.dispose();
+		label = null;
 	});
 
 	test('empty label', function () {

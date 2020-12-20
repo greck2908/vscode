@@ -7,14 +7,13 @@ import * as nls from 'vs/nls';
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { IJSONSchema } from 'vs/base/common/jsonSchema';
 import Severity from 'vs/base/common/severity';
-import { EXTENSION_IDENTIFIER_PATTERN } from 'vs/platform/extensionManagement/common/extensionManagement';
+import { IMessage, IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 import { Extensions, IJSONContributionRegistry } from 'vs/platform/jsonschemas/common/jsonContributionRegistry';
 import { Registry } from 'vs/platform/registry/common/platform';
-import { IMessage } from 'vs/workbench/services/extensions/common/extensions';
-import { ExtensionIdentifier, IExtensionDescription, EXTENSION_CATEGORIES } from 'vs/platform/extensions/common/extensions';
+import { EXTENSION_IDENTIFIER_PATTERN } from 'vs/platform/extensionManagement/common/extensionManagement';
 
+const hasOwnProperty = Object.hasOwnProperty;
 const schemaRegistry = Registry.as<IJSONContributionRegistry>(Extensions.JSONContribution);
-export type ExtensionKind = 'workspace' | 'ui' | undefined;
 
 export class ExtensionMessageCollector {
 
@@ -36,7 +35,7 @@ export class ExtensionMessageCollector {
 		this._messageHandler({
 			type: type,
 			message: message,
-			extensionId: this._extension.identifier,
+			extensionId: this._extension.id,
 			extensionPointId: this._extensionPointId
 		});
 	}
@@ -60,66 +59,31 @@ export interface IExtensionPointUser<T> {
 	collector: ExtensionMessageCollector;
 }
 
-export type IExtensionPointHandler<T> = (extensions: readonly IExtensionPointUser<T>[], delta: ExtensionPointUserDelta<T>) => void;
+export interface IExtensionPointHandler<T> {
+	(extensions: IExtensionPointUser<T>[]): void;
+}
 
 export interface IExtensionPoint<T> {
 	name: string;
 	setHandler(handler: IExtensionPointHandler<T>): void;
-	defaultExtensionKind: ExtensionKind;
-}
-
-export class ExtensionPointUserDelta<T> {
-
-	private static _toSet<T>(arr: readonly IExtensionPointUser<T>[]): Set<string> {
-		const result = new Set<string>();
-		for (let i = 0, len = arr.length; i < len; i++) {
-			result.add(ExtensionIdentifier.toKey(arr[i].description.identifier));
-		}
-		return result;
-	}
-
-	public static compute<T>(previous: readonly IExtensionPointUser<T>[] | null, current: readonly IExtensionPointUser<T>[]): ExtensionPointUserDelta<T> {
-		if (!previous || !previous.length) {
-			return new ExtensionPointUserDelta<T>(current, []);
-		}
-		if (!current || !current.length) {
-			return new ExtensionPointUserDelta<T>([], previous);
-		}
-
-		const previousSet = this._toSet(previous);
-		const currentSet = this._toSet(current);
-
-		let added = current.filter(user => !previousSet.has(ExtensionIdentifier.toKey(user.description.identifier)));
-		let removed = previous.filter(user => !currentSet.has(ExtensionIdentifier.toKey(user.description.identifier)));
-
-		return new ExtensionPointUserDelta<T>(added, removed);
-	}
-
-	constructor(
-		public readonly added: readonly IExtensionPointUser<T>[],
-		public readonly removed: readonly IExtensionPointUser<T>[],
-	) { }
 }
 
 export class ExtensionPoint<T> implements IExtensionPoint<T> {
 
 	public readonly name: string;
-	public readonly defaultExtensionKind: ExtensionKind;
-
 	private _handler: IExtensionPointHandler<T> | null;
 	private _users: IExtensionPointUser<T>[] | null;
-	private _delta: ExtensionPointUserDelta<T> | null;
+	private _done: boolean;
 
-	constructor(name: string, defaultExtensionKind: ExtensionKind) {
+	constructor(name: string) {
 		this.name = name;
-		this.defaultExtensionKind = defaultExtensionKind;
 		this._handler = null;
 		this._users = null;
-		this._delta = null;
+		this._done = false;
 	}
 
 	setHandler(handler: IExtensionPointHandler<T>): void {
-		if (this._handler !== null) {
+		if (this._handler !== null || this._done) {
 			throw new Error('Handler already set!');
 		}
 		this._handler = handler;
@@ -127,40 +91,35 @@ export class ExtensionPoint<T> implements IExtensionPoint<T> {
 	}
 
 	acceptUsers(users: IExtensionPointUser<T>[]): void {
-		this._delta = ExtensionPointUserDelta.compute(this._users, users);
+		if (this._users !== null || this._done) {
+			throw new Error('Users already set!');
+		}
 		this._users = users;
 		this._handle();
 	}
 
 	private _handle(): void {
-		if (this._handler === null || this._users === null || this._delta === null) {
+		if (this._handler === null || this._users === null) {
 			return;
 		}
+		this._done = true;
+
+		let handler = this._handler;
+		this._handler = null;
+
+		let users = this._users;
+		this._users = null;
 
 		try {
-			this._handler(this._users, this._delta);
+			handler(users);
 		} catch (err) {
 			onUnexpectedError(err);
 		}
 	}
 }
 
-const extensionKindSchema: IJSONSchema = {
-	type: 'string',
-	enum: [
-		'ui',
-		'workspace',
-		'web'
-	],
-	enumDescriptions: [
-		nls.localize('ui', "UI extension kind. In a remote window, such extensions are enabled only when available on the local machine."),
-		nls.localize('workspace', "Workspace extension kind. In a remote window, such extensions are enabled only when available on the remote."),
-		nls.localize('web', "Web worker extension kind. Such an extension can execute in a web worker extension host.")
-	],
-};
-
 const schemaId = 'vscode://schemas/vscode-extensions';
-export const schema: IJSONSchema = {
+export const schema = {
 	properties: {
 		engines: {
 			type: 'object',
@@ -188,7 +147,7 @@ export const schema: IJSONSchema = {
 			items: {
 				oneOf: [{
 					type: 'string',
-					enum: EXTENSION_CATEGORIES,
+					enum: ['Programming Languages', 'Snippets', 'Linters', 'Themes', 'Debuggers', 'Other', 'Keymaps', 'Formatters', 'Extension Packs', 'SCM Providers', 'Azure', 'Language Packs'],
 				},
 				{
 					type: 'string',
@@ -217,7 +176,7 @@ export const schema: IJSONSchema = {
 			type: 'object',
 			properties: {
 				// extensions will fill in
-			} as { [key: string]: any },
+			},
 			default: {}
 		},
 		preview: {
@@ -251,29 +210,14 @@ export const schema: IJSONSchema = {
 						body: 'onDebugInitialConfigurations'
 					},
 					{
-						label: 'onDebugDynamicConfigurations',
-						description: nls.localize('vscode.extension.activationEvents.onDebugDynamicConfigurations', 'An activation event emitted whenever a list of all debug configurations needs to be created (and all provideDebugConfigurations methods for the "dynamic" scope need to be called).'),
-						body: 'onDebugDynamicConfigurations'
-					},
-					{
 						label: 'onDebugResolve',
 						description: nls.localize('vscode.extension.activationEvents.onDebugResolve', 'An activation event emitted whenever a debug session with the specific type is about to be launched (and a corresponding resolveDebugConfiguration method needs to be called).'),
 						body: 'onDebugResolve:${6:type}'
 					},
 					{
-						label: 'onDebugAdapterProtocolTracker',
-						description: nls.localize('vscode.extension.activationEvents.onDebugAdapterProtocolTracker', 'An activation event emitted whenever a debug session with the specific type is about to be launched and a debug protocol tracker might be needed.'),
-						body: 'onDebugAdapterProtocolTracker:${6:type}'
-					},
-					{
 						label: 'workspaceContains',
 						description: nls.localize('vscode.extension.activationEvents.workspaceContains', 'An activation event emitted whenever a folder is opened that contains at least a file matching the specified glob pattern.'),
 						body: 'workspaceContains:${4:filePattern}'
-					},
-					{
-						label: 'onStartupFinished',
-						description: nls.localize('vscode.extension.activationEvents.onStartupFinished', 'An activation event emitted after the start-up finished (after all `*` activated extensions have finished activating).'),
-						body: 'onStartupFinished'
 					},
 					{
 						label: 'onFileSystem',
@@ -291,24 +235,9 @@ export const schema: IJSONSchema = {
 						description: nls.localize('vscode.extension.activationEvents.onView', 'An activation event emitted whenever the specified view is expanded.'),
 					},
 					{
-						label: 'onIdentity',
-						body: 'onIdentity:${8:identity}',
-						description: nls.localize('vscode.extension.activationEvents.onIdentity', 'An activation event emitted whenever the specified user identity.'),
-					},
-					{
 						label: 'onUri',
 						body: 'onUri',
 						description: nls.localize('vscode.extension.activationEvents.onUri', 'An activation event emitted whenever a system-wide Uri directed towards this extension is open.'),
-					},
-					{
-						label: 'onCustomEditor',
-						body: 'onCustomEditor:${9:viewType}',
-						description: nls.localize('vscode.extension.activationEvents.onCustomEditor', 'An activation event emitted whenever the specified custom editor becomes visible.'),
-					},
-					{
-						label: 'onNotebook',
-						body: 'onNotebook:${10:viewType}',
-						description: nls.localize('vscode.extension.activationEvents.onNotebook', 'An activation event emitted whenever the specified notebook document is opened.'),
 					},
 					{
 						label: '*',
@@ -377,34 +306,6 @@ export const schema: IJSONSchema = {
 				pattern: EXTENSION_IDENTIFIER_PATTERN
 			}
 		},
-		extensionKind: {
-			description: nls.localize('extensionKind', "Define the kind of an extension. `ui` extensions are installed and run on the local machine while `workspace` extensions run on the remote."),
-			type: 'array',
-			items: extensionKindSchema,
-			default: ['workspace'],
-			defaultSnippets: [
-				{
-					body: ['ui'],
-					description: nls.localize('extensionKind.ui', "Define an extension which can run only on the local machine when connected to remote window.")
-				},
-				{
-					body: ['workspace'],
-					description: nls.localize('extensionKind.workspace', "Define an extension which can run only on the remote machine when connected remote window.")
-				},
-				{
-					body: ['ui', 'workspace'],
-					description: nls.localize('extensionKind.ui-workspace', "Define an extension which can run on either side, with a preference towards running on the local machine.")
-				},
-				{
-					body: ['workspace', 'ui'],
-					description: nls.localize('extensionKind.workspace-ui', "Define an extension which can run on either side, with a preference towards running on the remote machine.")
-				},
-				{
-					body: [],
-					description: nls.localize('extensionKind.empty', "Define an extension which cannot run in a remote context, neither on the local, nor on the remote machine.")
-				}
-			]
-		},
 		scripts: {
 			type: 'object',
 			properties: {
@@ -425,32 +326,29 @@ export const schema: IJSONSchema = {
 	}
 };
 
-export interface IExtensionPointDescriptor {
-	extensionPoint: string;
-	deps?: IExtensionPoint<any>[];
-	jsonSchema: IJSONSchema;
-	defaultExtensionKind?: ExtensionKind;
-}
-
 export class ExtensionsRegistryImpl {
 
-	private readonly _extensionPoints = new Map<string, ExtensionPoint<any>>();
+	private _extensionPoints: { [extPoint: string]: ExtensionPoint<any>; };
 
-	public registerExtensionPoint<T>(desc: IExtensionPointDescriptor): IExtensionPoint<T> {
-		if (this._extensionPoints.has(desc.extensionPoint)) {
-			throw new Error('Duplicate extension point: ' + desc.extensionPoint);
+	constructor() {
+		this._extensionPoints = {};
+	}
+
+	public registerExtensionPoint<T>(extensionPoint: string, deps: IExtensionPoint<any>[], jsonSchema: IJSONSchema): IExtensionPoint<T> {
+		if (hasOwnProperty.call(this._extensionPoints, extensionPoint)) {
+			throw new Error('Duplicate extension point: ' + extensionPoint);
 		}
-		const result = new ExtensionPoint<T>(desc.extensionPoint, desc.defaultExtensionKind);
-		this._extensionPoints.set(desc.extensionPoint, result);
+		let result = new ExtensionPoint<T>(extensionPoint);
+		this._extensionPoints[extensionPoint] = result;
 
-		schema.properties!['contributes'].properties![desc.extensionPoint] = desc.jsonSchema;
+		schema.properties['contributes'].properties[extensionPoint] = jsonSchema;
 		schemaRegistry.registerSchema(schemaId, schema);
 
 		return result;
 	}
 
 	public getExtensionPoints(): ExtensionPoint<any>[] {
-		return Array.from(this._extensionPoints.values());
+		return Object.keys(this._extensionPoints).map(point => this._extensionPoints[point]);
 	}
 }
 

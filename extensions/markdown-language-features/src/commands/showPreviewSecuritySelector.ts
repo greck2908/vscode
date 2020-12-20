@@ -19,12 +19,12 @@ export class ShowPreviewSecuritySelectorCommand implements Command {
 
 	public execute(resource: string | undefined) {
 		if (this.previewManager.activePreviewResource) {
-			this.previewSecuritySelector.showSecuritySelectorForResource(this.previewManager.activePreviewResource);
+			this.previewSecuritySelector.showSecutitySelectorForResource(this.previewManager.activePreviewResource);
 		} else if (resource) {
 			const source = vscode.Uri.parse(resource);
-			this.previewSecuritySelector.showSecuritySelectorForResource(source.query ? vscode.Uri.parse(source.query) : source);
+			this.previewSecuritySelector.showSecutitySelectorForResource(source.query ? vscode.Uri.parse(source.query) : source);
 		} else if (vscode.window.activeTextEditor && isMarkdownFile(vscode.window.activeTextEditor.document)) {
-			this.previewSecuritySelector.showSecuritySelectorForResource(vscode.window.activeTextEditor.document.uri);
+			this.previewSecuritySelector.showSecutitySelectorForResource(vscode.window.activeTextEditor.document.uri);
 		}
 	}
 }

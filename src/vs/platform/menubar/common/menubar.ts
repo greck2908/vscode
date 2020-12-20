@@ -3,10 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { URI } from 'vs/base/common/uri';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 
-export interface ICommonMenubarService {
-	updateMenubar(windowId: number, menuData: IMenubarData): Promise<void>;
+export const IMenubarService = createDecorator<IMenubarService>('menubarService');
+
+export interface IMenubarService {
+	_serviceBrand: any;
+
+	updateMenubar(windowId: number, menuData: IMenubarData): TPromise<void>;
 }
 
 export interface IMenubarData {
@@ -20,7 +25,6 @@ export interface IMenubarMenu {
 
 export interface IMenubarKeybinding {
 	label: string;
-	userSettingsLabel?: string;
 	isNative?: boolean; // Assumed true if missing
 }
 
@@ -29,13 +33,6 @@ export interface IMenubarMenuItemAction {
 	label: string;
 	checked?: boolean; // Assumed false if missing
 	enabled?: boolean; // Assumed true if missing
-}
-
-export interface IMenubarMenuUriItemAction {
-	id: string;
-	label: string;
-	uri: URI;
-	enabled?: boolean;
 }
 
 export interface IMenubarMenuItemSubmenu {
@@ -48,7 +45,7 @@ export interface IMenubarMenuItemSeparator {
 	id: 'vscode.menubar.separator';
 }
 
-export type MenubarMenuItem = IMenubarMenuItemAction | IMenubarMenuItemSubmenu | IMenubarMenuItemSeparator | IMenubarMenuUriItemAction;
+export type MenubarMenuItem = IMenubarMenuItemAction | IMenubarMenuItemSubmenu | IMenubarMenuItemSeparator;
 
 export function isMenubarMenuItemSubmenu(menuItem: MenubarMenuItem): menuItem is IMenubarMenuItemSubmenu {
 	return (<IMenubarMenuItemSubmenu>menuItem).submenu !== undefined;
@@ -58,10 +55,6 @@ export function isMenubarMenuItemSeparator(menuItem: MenubarMenuItem): menuItem 
 	return (<IMenubarMenuItemSeparator>menuItem).id === 'vscode.menubar.separator';
 }
 
-export function isMenubarMenuItemUriAction(menuItem: MenubarMenuItem): menuItem is IMenubarMenuUriItemAction {
-	return (<IMenubarMenuUriItemAction>menuItem).uri !== undefined;
-}
-
 export function isMenubarMenuItemAction(menuItem: MenubarMenuItem): menuItem is IMenubarMenuItemAction {
-	return !isMenubarMenuItemSubmenu(menuItem) && !isMenubarMenuItemSeparator(menuItem) && !isMenubarMenuItemUriAction(menuItem);
+	return !isMenubarMenuItemSubmenu(menuItem) && !isMenubarMenuItemSeparator(menuItem);
 }

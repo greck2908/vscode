@@ -9,17 +9,25 @@
 
 const withDefaults = require('../../shared.webpack.config');
 const path = require('path');
+var webpack = require('webpack');
 
 module.exports = withDefaults({
 	context: path.join(__dirname),
 	entry: {
-		extension: './src/node/htmlServerMain.ts',
+		extension: './src/htmlServerMain.ts',
 	},
 	output: {
 		filename: 'htmlServerMain.js',
-		path: path.join(__dirname, 'dist', 'node'),
+		path: path.join(__dirname, 'dist'),
 	},
 	externals: {
 		'typescript': 'commonjs typescript'
-	}
+	},
+	plugins: [
+		new webpack.NormalModuleReplacementPlugin(
+			/[/\\]vscode-languageserver[/\\]lib[/\\]files\.js/,
+			require.resolve('./build/filesFillIn')
+		),
+		new webpack.IgnorePlugin(/vertx/)
+	],
 });

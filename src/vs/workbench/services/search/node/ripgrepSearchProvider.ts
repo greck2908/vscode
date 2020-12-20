@@ -3,25 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationTokenSource, CancellationToken } from 'vs/base/common/cancellation';
+import { CancellationTokenSource } from 'vs/base/common/cancellation';
 import { OutputChannel } from 'vs/workbench/services/search/node/ripgrepSearchUtils';
 import { RipgrepTextSearchEngine } from 'vs/workbench/services/search/node/ripgrepTextSearchEngine';
-import { TextSearchProvider, TextSearchComplete, TextSearchResult, TextSearchQuery, TextSearchOptions } from 'vs/workbench/services/search/common/searchExtTypes';
-import { Progress } from 'vs/platform/progress/common/progress';
+import * as vscode from 'vscode';
 
-export class RipgrepSearchProvider implements TextSearchProvider {
-	private inProgress: Set<CancellationTokenSource> = new Set();
+export class RipgrepSearchProvider implements vscode.TextSearchProvider {
+	private inProgress: Set<vscode.CancellationTokenSource> = new Set();
 
 	constructor(private outputChannel: OutputChannel) {
 		process.once('exit', () => this.dispose());
 	}
 
-	provideTextSearchResults(query: TextSearchQuery, options: TextSearchOptions, progress: Progress<TextSearchResult>, token: CancellationToken): Promise<TextSearchComplete> {
+	provideTextSearchResults(query: vscode.TextSearchQuery, options: vscode.TextSearchOptions, progress: vscode.Progress<vscode.TextSearchResult>, token: vscode.CancellationToken): Promise<vscode.TextSearchComplete> {
 		const engine = new RipgrepTextSearchEngine(this.outputChannel);
 		return this.withToken(token, token => engine.provideTextSearchResults(query, options, progress, token));
 	}
 
-	private async withToken<T>(token: CancellationToken, fn: (token: CancellationToken) => Promise<T>): Promise<T> {
+	private async withToken<T>(token: vscode.CancellationToken, fn: (token: vscode.CancellationToken) => Thenable<T>): Promise<T> {
 		const merged = mergedTokenSource(token);
 		this.inProgress.add(merged);
 		const result = await fn(merged.token);
@@ -35,7 +34,7 @@ export class RipgrepSearchProvider implements TextSearchProvider {
 	}
 }
 
-function mergedTokenSource(token: CancellationToken): CancellationTokenSource {
+function mergedTokenSource(token: vscode.CancellationToken): vscode.CancellationTokenSource {
 	const tokenSource = new CancellationTokenSource();
 	token.onCancellationRequested(() => tokenSource.cancel());
 

@@ -6,40 +6,14 @@
 //@ts-check
 'use strict';
 
-(function () {
-	const bootstrap = bootstrapLib();
-	const bootstrapWindow = bootstrapWindowLib();
+const bootstrap = require('../../../../bootstrap');
+const bootstrapWindow = require('../../../../bootstrap-window');
 
-	// Avoid Monkey Patches from Application Insights
-	bootstrap.avoidMonkeyPatchFromAppInsights();
+// Avoid Monkey Patches from Application Insights
+bootstrap.avoidMonkeyPatchFromAppInsights();
 
-	// Load shared process into window
-	bootstrapWindow.load(['vs/code/electron-browser/sharedProcess/sharedProcessMain'], function (sharedProcess, configuration) {
-		sharedProcess.startup({
-			machineId: configuration.machineId,
-			windowId: configuration.windowId
-		});
+bootstrapWindow.load(['vs/code/electron-browser/sharedProcess/sharedProcessMain'], function (sharedProcess, configuration) {
+	sharedProcess.startup({
+		machineId: configuration.machineId
 	});
-
-
-	//#region Globals
-
-	/**
-	 * @returns {{ avoidMonkeyPatchFromAppInsights: () => void; }}
-	 */
-	function bootstrapLib() {
-		// @ts-ignore (defined in bootstrap.js)
-		return window.MonacoBootstrap;
-	}
-
-	/**
-	 * @returns {{ load: (modules: string[], resultCallback: (result, configuration: object) => any, options?: object) => unknown }}
-	 */
-	function bootstrapWindowLib() {
-		// @ts-ignore (defined in bootstrap-window.js)
-		return window.MonacoBootstrapWindow;
-	}
-
-	//#endregion
-
-}());
+});

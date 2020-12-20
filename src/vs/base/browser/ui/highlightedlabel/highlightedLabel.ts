@@ -3,28 +3,28 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as objects from 'vs/base/common/objects';
+import { IDisposable } from 'vs/base/common/lifecycle';
 import * as dom from 'vs/base/browser/dom';
-import { renderLabelWithIcons } from 'vs/base/browser/ui/iconLabel/iconLabels';
+import * as objects from 'vs/base/common/objects';
+import { renderOcticons } from 'vs/base/browser/ui/octiconLabel/octiconLabel';
 
 export interface IHighlight {
 	start: number;
 	end: number;
-	extraClasses?: string;
 }
 
-export class HighlightedLabel {
+export class HighlightedLabel implements IDisposable {
 
-	private readonly domNode: HTMLElement;
-	private text: string = '';
-	private title: string = '';
-	private highlights: IHighlight[] = [];
-	private didEverRender: boolean = false;
+	private domNode: HTMLElement;
+	private text: string;
+	private title: string;
+	private highlights: IHighlight[];
+	private didEverRender: boolean;
 
-	constructor(container: HTMLElement, private supportIcons: boolean) {
+	constructor(container: HTMLElement) {
 		this.domNode = document.createElement('span');
 		this.domNode.className = 'monaco-highlighted-label';
-
+		this.didEverRender = false;
 		container.appendChild(this.domNode);
 	}
 
@@ -32,7 +32,7 @@ export class HighlightedLabel {
 		return this.domNode;
 	}
 
-	set(text: string | undefined, highlights: IHighlight[] = [], title: string = '', escapeNewLines?: boolean) {
+	set(text: string, highlights: IHighlight[] = [], title: string = '', escapeNewLines?: boolean) {
 		if (!text) {
 			text = '';
 		}
@@ -44,48 +44,54 @@ export class HighlightedLabel {
 			return;
 		}
 
+		if (!Array.isArray(highlights)) {
+			highlights = [];
+		}
+
 		this.text = text;
 		this.title = title;
 		this.highlights = highlights;
 		this.render();
 	}
 
-	private render(): void {
+	private render() {
+		dom.clearNode(this.domNode);
 
-		const children: HTMLSpanElement[] = [];
-		let pos = 0;
+		let htmlContent: string[] = [],
+			highlight: IHighlight,
+			pos = 0;
 
-		for (const highlight of this.highlights) {
+		for (let i = 0; i < this.highlights.length; i++) {
+			highlight = this.highlights[i];
 			if (highlight.end === highlight.start) {
 				continue;
 			}
 			if (pos < highlight.start) {
-				const substring = this.text.substring(pos, highlight.start);
-				children.push(dom.$('span', undefined, ...this.supportIcons ? renderLabelWithIcons(substring) : [substring]));
+				htmlContent.push('<span>');
+				htmlContent.push(renderOcticons(this.text.substring(pos, highlight.start)));
+				htmlContent.push('</span>');
 				pos = highlight.end;
 			}
-
-			const substring = this.text.substring(highlight.start, highlight.end);
-			const element = dom.$('span.highlight', undefined, ...this.supportIcons ? renderLabelWithIcons(substring) : [substring]);
-			if (highlight.extraClasses) {
-				element.classList.add(highlight.extraClasses);
-			}
-			children.push(element);
+			htmlContent.push('<span class="highlight">');
+			htmlContent.push(renderOcticons(this.text.substring(highlight.start, highlight.end)));
+			htmlContent.push('</span>');
 			pos = highlight.end;
 		}
 
 		if (pos < this.text.length) {
-			const substring = this.text.substring(pos,);
-			children.push(dom.$('span', undefined, ...this.supportIcons ? renderLabelWithIcons(substring) : [substring]));
+			htmlContent.push('<span>');
+			htmlContent.push(renderOcticons(this.text.substring(pos)));
+			htmlContent.push('</span>');
 		}
 
-		dom.reset(this.domNode, ...children);
-		if (this.title) {
-			this.domNode.title = this.title;
-		} else {
-			this.domNode.removeAttribute('title');
-		}
+		this.domNode.innerHTML = htmlContent.join('');
+		this.domNode.title = this.title;
 		this.didEverRender = true;
+	}
+
+	dispose() {
+		this.text = null!; // StrictNullOverride: nulling out ok in dispose
+		this.highlights = null!; // StrictNullOverride: nulling out ok in dispose
 	}
 
 	static escapeNewLines(text: string, highlights: IHighlight[]): string {
@@ -93,7 +99,7 @@ export class HighlightedLabel {
 		let total = 0;
 		let extra = 0;
 
-		return text.replace(/\r\n|\r|\n/g, (match, offset) => {
+		return text.replace(/\r\n|\r|\n/, (match, offset) => {
 			extra = match === '\r\n' ? -1 : 0;
 			offset += total;
 

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as assert from 'assert';
-import { ILine, RenderedLinesCollection } from 'vs/editor/browser/view/viewLayer';
+import { RenderedLinesCollection, ILine } from 'vs/editor/browser/view/viewLayer';
 
 class TestLine implements ILine {
 

@@ -5,18 +5,16 @@
 
 import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
 import { ViewPart } from 'vs/editor/browser/view/viewPart';
-import { RenderingContext, RestrictedRenderingContext } from 'vs/editor/common/view/renderingContext';
 import { ViewContext } from 'vs/editor/common/view/viewContext';
+import { RenderingContext, RestrictedRenderingContext } from 'vs/editor/common/view/renderingContext';
 import * as viewEvents from 'vs/editor/common/view/viewEvents';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
-
 
 export class Margin extends ViewPart {
 
 	public static readonly CLASS_NAME = 'glyph-margin';
 	public static readonly OUTER_CLASS_NAME = 'margin';
 
-	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _domNode: FastDomNode<HTMLElement>;
 	private _canUseLayerHinting: boolean;
 	private _contentLeft: number;
 	private _glyphMarginLeft: number;
@@ -25,24 +23,12 @@ export class Margin extends ViewPart {
 
 	constructor(context: ViewContext) {
 		super(context);
-		const options = this._context.configuration.options;
-		const layoutInfo = options.get(EditorOption.layoutInfo);
+		this._canUseLayerHinting = this._context.configuration.editor.canUseLayerHinting;
+		this._contentLeft = this._context.configuration.editor.layoutInfo.contentLeft;
+		this._glyphMarginLeft = this._context.configuration.editor.layoutInfo.glyphMarginLeft;
+		this._glyphMarginWidth = this._context.configuration.editor.layoutInfo.glyphMarginWidth;
 
-		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
-		this._contentLeft = layoutInfo.contentLeft;
-		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
-		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
-
-		this._domNode = createFastDomNode(document.createElement('div'));
-		this._domNode.setClassName(Margin.OUTER_CLASS_NAME);
-		this._domNode.setPosition('absolute');
-		this._domNode.setAttribute('role', 'presentation');
-		this._domNode.setAttribute('aria-hidden', 'true');
-
-		this._glyphMarginBackgroundDomNode = createFastDomNode(document.createElement('div'));
-		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
-
-		this._domNode.appendChild(this._glyphMarginBackgroundDomNode);
+		this._domNode = this._createDomNode();
 	}
 
 	public dispose(): void {
@@ -53,16 +39,32 @@ export class Margin extends ViewPart {
 		return this._domNode;
 	}
 
+	private _createDomNode(): FastDomNode<HTMLElement> {
+		let domNode = createFastDomNode(document.createElement('div'));
+		domNode.setClassName(Margin.OUTER_CLASS_NAME);
+		domNode.setPosition('absolute');
+		domNode.setAttribute('role', 'presentation');
+		domNode.setAttribute('aria-hidden', 'true');
+
+		this._glyphMarginBackgroundDomNode = createFastDomNode(document.createElement('div'));
+		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
+
+		domNode.appendChild(this._glyphMarginBackgroundDomNode);
+		return domNode;
+	}
+
 	// --- begin event handlers
 
 	public onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		const options = this._context.configuration.options;
-		const layoutInfo = options.get(EditorOption.layoutInfo);
+		if (e.canUseLayerHinting) {
+			this._canUseLayerHinting = this._context.configuration.editor.canUseLayerHinting;
+		}
 
-		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
-		this._contentLeft = layoutInfo.contentLeft;
-		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
-		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
+		if (e.layoutInfo) {
+			this._contentLeft = this._context.configuration.editor.layoutInfo.contentLeft;
+			this._glyphMarginLeft = this._context.configuration.editor.layoutInfo.glyphMarginLeft;
+			this._glyphMarginWidth = this._context.configuration.editor.layoutInfo.glyphMarginWidth;
+		}
 
 		return true;
 	}
@@ -78,11 +80,10 @@ export class Margin extends ViewPart {
 
 	public render(ctx: RestrictedRenderingContext): void {
 		this._domNode.setLayerHinting(this._canUseLayerHinting);
-		this._domNode.setContain('strict');
 		const adjustedScrollTop = ctx.scrollTop - ctx.bigNumbersDelta;
 		this._domNode.setTop(-adjustedScrollTop);
 
-		const height = Math.min(ctx.scrollHeight, 1000000);
+		let height = Math.min(ctx.scrollHeight, 1000000);
 		this._domNode.setHeight(height);
 		this._domNode.setWidth(this._contentLeft);
 

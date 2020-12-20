@@ -4,38 +4,39 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import * as arrays from 'vs/base/common/arrays';
-import { CancelablePromise, createCancelablePromise, first, timeout } from 'vs/base/common/async';
-import { CancellationToken } from 'vs/base/common/cancellation';
-import { onUnexpectedError, onUnexpectedExternalError } from 'vs/base/common/errors';
-import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
-import { Disposable, DisposableStore } from 'vs/base/common/lifecycle';
-import { IActiveCodeEditor, ICodeEditor } from 'vs/editor/browser/editorBrowser';
-import { EditorAction, IActionOptions, registerEditorAction, registerEditorContribution, registerModelAndPositionCommand } from 'vs/editor/browser/editorExtensions';
-import { CursorChangeReason, ICursorPositionChangedEvent } from 'vs/editor/common/controller/cursorEvents';
-import { Position } from 'vs/editor/common/core/position';
-import { Range } from 'vs/editor/common/core/range';
-import { Selection } from 'vs/editor/common/core/selection';
-import { IEditorContribution } from 'vs/editor/common/editorCommon';
-import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
-import { IModelDeltaDecoration, ITextModel, OverviewRulerLane, TrackedRangeStickiness, IWordAtPosition } from 'vs/editor/common/model';
-import { ModelDecorationOptions } from 'vs/editor/common/model/textModel';
-import { DocumentHighlight, DocumentHighlightKind, DocumentHighlightProviderRegistry } from 'vs/editor/common/modes';
-import { IContextKey, IContextKeyService, RawContextKey } from 'vs/platform/contextkey/common/contextkey';
-import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
-import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { activeContrastBorder, editorSelectionHighlight, editorSelectionHighlightBorder, overviewRulerSelectionHighlightForeground, registerColor } from 'vs/platform/theme/common/colorRegistry';
-import { registerThemingParticipant, themeColorFromId } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
-import { alert } from 'vs/base/browser/ui/aria/aria';
 
-const editorWordHighlight = registerColor('editor.wordHighlightBackground', { dark: '#575757B8', light: '#57575740', hc: null }, nls.localize('wordHighlight', 'Background color of a symbol during read-access, like reading a variable. The color must not be opaque so as not to hide underlying decorations.'), true);
-const editorWordHighlightStrong = registerColor('editor.wordHighlightStrongBackground', { dark: '#004972B8', light: '#0e639c40', hc: null }, nls.localize('wordHighlightStrong', 'Background color of a symbol during write-access, like writing to a variable. The color must not be opaque so as not to hide underlying decorations.'), true);
-const editorWordHighlightBorder = registerColor('editor.wordHighlightBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('wordHighlightBorder', 'Border color of a symbol during read-access, like reading a variable.'));
-const editorWordHighlightStrongBorder = registerColor('editor.wordHighlightStrongBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('wordHighlightStrongBorder', 'Border color of a symbol during write-access, like writing to a variable.'));
-const overviewRulerWordHighlightForeground = registerColor('editorOverviewRuler.wordHighlightForeground', { dark: '#A0A0A0CC', light: '#A0A0A0CC', hc: '#A0A0A0CC' }, nls.localize('overviewRulerWordHighlightForeground', 'Overview ruler marker color for symbol highlights. The color must not be opaque so as not to hide underlying decorations.'), true);
-const overviewRulerWordHighlightStrongForeground = registerColor('editorOverviewRuler.wordHighlightStrongForeground', { dark: '#C0A0C0CC', light: '#C0A0C0CC', hc: '#C0A0C0CC' }, nls.localize('overviewRulerWordHighlightStrongForeground', 'Overview ruler marker color for write-access symbol highlights. The color must not be opaque so as not to hide underlying decorations.'), true);
-const ctxHasWordHighlights = new RawContextKey<boolean>('hasWordHighlights', false);
+import { first, createCancelablePromise, CancelablePromise, timeout } from 'vs/base/common/async';
+import { onUnexpectedExternalError, onUnexpectedError } from 'vs/base/common/errors';
+import { Range } from 'vs/editor/common/core/range';
+import * as editorCommon from 'vs/editor/common/editorCommon';
+import * as arrays from 'vs/base/common/arrays';
+import { registerEditorContribution, EditorAction, IActionOptions, registerEditorAction, registerDefaultLanguageCommand } from 'vs/editor/browser/editorExtensions';
+import { DocumentHighlight, DocumentHighlightKind, DocumentHighlightProviderRegistry } from 'vs/editor/common/modes';
+import { IDisposable, dispose, Disposable } from 'vs/base/common/lifecycle';
+import { Position } from 'vs/editor/common/core/position';
+import { Selection } from 'vs/editor/common/core/selection';
+import { registerColor, editorSelectionHighlight, overviewRulerSelectionHighlightForeground, activeContrastBorder, editorSelectionHighlightBorder } from 'vs/platform/theme/common/colorRegistry';
+import { registerThemingParticipant, themeColorFromId } from 'vs/platform/theme/common/themeService';
+import { CursorChangeReason, ICursorPositionChangedEvent } from 'vs/editor/common/controller/cursorEvents';
+import { ModelDecorationOptions } from 'vs/editor/common/model/textModel';
+import { IContextKey, IContextKeyService, RawContextKey } from 'vs/platform/contextkey/common/contextkey';
+import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
+import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
+import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
+import { ICodeEditor, IActiveCodeEditor } from 'vs/editor/browser/editorBrowser';
+import { ITextModel, TrackedRangeStickiness, OverviewRulerLane, IModelDeltaDecoration } from 'vs/editor/common/model';
+import { CancellationToken } from 'vs/base/common/cancellation';
+import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
+
+export const editorWordHighlight = registerColor('editor.wordHighlightBackground', { dark: '#575757B8', light: '#57575740', hc: null }, nls.localize('wordHighlight', 'Background color of a symbol during read-access, like reading a variable. The color must not be opaque to not hide underlying decorations.'), true);
+export const editorWordHighlightStrong = registerColor('editor.wordHighlightStrongBackground', { dark: '#004972B8', light: '#0e639c40', hc: null }, nls.localize('wordHighlightStrong', 'Background color of a symbol during write-access, like writing to a variable. The color must not be opaque to not hide underlying decorations.'), true);
+export const editorWordHighlightBorder = registerColor('editor.wordHighlightBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('wordHighlightBorder', 'Border color of a symbol during read-access, like reading a variable.'));
+export const editorWordHighlightStrongBorder = registerColor('editor.wordHighlightStrongBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('wordHighlightStrongBorder', 'Border color of a symbol during write-access, like writing to a variable.'));
+
+export const overviewRulerWordHighlightForeground = registerColor('editorOverviewRuler.wordHighlightForeground', { dark: '#A0A0A0CC', light: '#A0A0A0CC', hc: '#A0A0A0CC' }, nls.localize('overviewRulerWordHighlightForeground', 'Overview ruler marker color for symbol highlights. The color must not be opaque to not hide underlying decorations.'), true);
+export const overviewRulerWordHighlightStrongForeground = registerColor('editorOverviewRuler.wordHighlightStrongForeground', { dark: '#C0A0C0CC', light: '#C0A0C0CC', hc: '#C0A0C0CC' }, nls.localize('overviewRulerWordHighlightStrongForeground', 'Overview ruler marker color for write-access symbol highlights. The color must not be opaque to not hide underlying decorations.'), true);
+
+export const ctxHasWordHighlights = new RawContextKey<boolean>('hasWordHighlights', false);
 
 export function getOccurrencesAtPosition(model: ITextModel, position: Position, token: CancellationToken): Promise<DocumentHighlight[] | null | undefined> {
 
@@ -47,7 +48,7 @@ export function getOccurrencesAtPosition(model: ITextModel, position: Position, 
 	return first<DocumentHighlight[] | null | undefined>(orderedByScore.map(provider => () => {
 		return Promise.resolve(provider.provideDocumentHighlights(model, position, token))
 			.then(undefined, onUnexpectedExternalError);
-	}), arrays.isNonEmptyArray);
+	}), result => !arrays.isFalsyOrEmpty(result));
 }
 
 interface IOccurenceAtPositionRequest {
@@ -66,7 +67,7 @@ abstract class OccurenceAtPositionRequest implements IOccurenceAtPositionRequest
 		this.result = createCancelablePromise(token => this._compute(model, selection, wordSeparators, token));
 	}
 
-	protected abstract _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Promise<DocumentHighlight[]>;
+	protected abstract _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Thenable<DocumentHighlight[]>;
 
 	private _getCurrentWordRange(model: ITextModel, selection: Selection): Range | null {
 		const word = model.getWordAtPosition(selection.getPosition());
@@ -105,21 +106,21 @@ abstract class OccurenceAtPositionRequest implements IOccurenceAtPositionRequest
 }
 
 class SemanticOccurenceAtPositionRequest extends OccurenceAtPositionRequest {
-	protected _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Promise<DocumentHighlight[]> {
-		return getOccurrencesAtPosition(model, selection.getPosition(), token).then(value => value || []);
+	protected _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Thenable<DocumentHighlight[]> {
+		return getOccurrencesAtPosition(model, selection.getPosition(), token);
 	}
 }
 
 class TextualOccurenceAtPositionRequest extends OccurenceAtPositionRequest {
 
-	private readonly _selectionIsEmpty: boolean;
+	private _selectionIsEmpty: boolean;
 
 	constructor(model: ITextModel, selection: Selection, wordSeparators: string) {
 		super(model, selection, wordSeparators);
 		this._selectionIsEmpty = selection.isEmpty();
 	}
 
-	protected _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Promise<DocumentHighlight[]> {
+	protected _compute(model: ITextModel, selection: Selection, wordSeparators: string, token: CancellationToken): Thenable<DocumentHighlight[]> {
 		return timeout(250, token).then(() => {
 			if (!selection.isEmpty()) {
 				return [];
@@ -127,7 +128,7 @@ class TextualOccurenceAtPositionRequest extends OccurenceAtPositionRequest {
 
 			const word = model.getWordAtPosition(selection.getPosition());
 
-			if (!word || word.word.length > 1000) {
+			if (!word) {
 				return [];
 			}
 			const matches = model.findMatches(word.word, true, false, true, wordSeparators, false);
@@ -156,15 +157,15 @@ function computeOccurencesAtPosition(model: ITextModel, selection: Selection, wo
 	return new TextualOccurenceAtPositionRequest(model, selection, wordSeparators);
 }
 
-registerModelAndPositionCommand('_executeDocumentHighlights', (model, position) => getOccurrencesAtPosition(model, position, CancellationToken.None));
+registerDefaultLanguageCommand('_executeDocumentHighlights', (model, position) => getOccurrencesAtPosition(model, position, CancellationToken.None));
 
 class WordHighlighter {
 
-	private readonly editor: IActiveCodeEditor;
+	private editor: IActiveCodeEditor;
 	private occurrencesHighlight: boolean;
-	private readonly model: ITextModel;
+	private model: ITextModel;
 	private _decorationIds: string[];
-	private readonly toUnhook = new DisposableStore();
+	private toUnhook: IDisposable[];
 
 	private workerRequestTokenId: number = 0;
 	private workerRequest: IOccurenceAtPositionRequest | null;
@@ -174,16 +175,17 @@ class WordHighlighter {
 	private lastCursorPositionChangeTime: number = 0;
 	private renderDecorationsTimer: any = -1;
 
-	private readonly _hasWordHighlights: IContextKey<boolean>;
+	private _hasWordHighlights: IContextKey<boolean>;
 	private _ignorePositionChangeEvent: boolean;
 
 	constructor(editor: IActiveCodeEditor, contextKeyService: IContextKeyService) {
 		this.editor = editor;
 		this._hasWordHighlights = ctxHasWordHighlights.bindTo(contextKeyService);
 		this._ignorePositionChangeEvent = false;
-		this.occurrencesHighlight = this.editor.getOption(EditorOption.occurrencesHighlight);
+		this.occurrencesHighlight = this.editor.getConfiguration().contribInfo.occurrencesHighlight;
 		this.model = this.editor.getModel();
-		this.toUnhook.add(editor.onDidChangeCursorPosition((e: ICursorPositionChangedEvent) => {
+		this.toUnhook = [];
+		this.toUnhook.push(editor.onDidChangeCursorPosition((e: ICursorPositionChangedEvent) => {
 
 			if (this._ignorePositionChangeEvent) {
 				// We are changing the position => ignore this event
@@ -198,11 +200,11 @@ class WordHighlighter {
 
 			this._onPositionChanged(e);
 		}));
-		this.toUnhook.add(editor.onDidChangeModelContent((e) => {
+		this.toUnhook.push(editor.onDidChangeModelContent((e) => {
 			this._stopAll();
 		}));
-		this.toUnhook.add(editor.onDidChangeConfiguration((e) => {
-			let newValue = this.editor.getOption(EditorOption.occurrencesHighlight);
+		this.toUnhook.push(editor.onDidChangeConfiguration((e) => {
+			let newValue = this.editor.getConfiguration().contribInfo.occurrencesHighlight;
 			if (this.occurrencesHighlight !== newValue) {
 				this.occurrencesHighlight = newValue;
 				this._stopAll();
@@ -239,18 +241,13 @@ class WordHighlighter {
 
 	public moveNext() {
 		let highlights = this._getSortedHighlights();
-		let index = highlights.findIndex((range) => range.containsPosition(this.editor.getPosition()));
+		let index = arrays.firstIndex(highlights, (range) => range.containsPosition(this.editor.getPosition()));
 		let newIndex = ((index + 1) % highlights.length);
 		let dest = highlights[newIndex];
 		try {
 			this._ignorePositionChangeEvent = true;
 			this.editor.setPosition(dest.getStartPosition());
 			this.editor.revealRangeInCenterIfOutsideViewport(dest);
-			const word = this._getWord();
-			if (word) {
-				const lineContent = this.editor.getModel().getLineContent(dest.startLineNumber);
-				alert(`${lineContent}, ${newIndex + 1} of ${highlights.length} for '${word.word}'`);
-			}
 		} finally {
 			this._ignorePositionChangeEvent = false;
 		}
@@ -258,18 +255,13 @@ class WordHighlighter {
 
 	public moveBack() {
 		let highlights = this._getSortedHighlights();
-		let index = highlights.findIndex((range) => range.containsPosition(this.editor.getPosition()));
+		let index = arrays.firstIndex(highlights, (range) => range.containsPosition(this.editor.getPosition()));
 		let newIndex = ((index - 1 + highlights.length) % highlights.length);
 		let dest = highlights[newIndex];
 		try {
 			this._ignorePositionChangeEvent = true;
 			this.editor.setPosition(dest.getStartPosition());
 			this.editor.revealRangeInCenterIfOutsideViewport(dest);
-			const word = this._getWord();
-			if (word) {
-				const lineContent = this.editor.getModel().getLineContent(dest.startLineNumber);
-				alert(`${lineContent}, ${newIndex + 1} of ${highlights.length} for '${word.word}'`);
-			}
 		} finally {
 			this._ignorePositionChangeEvent = false;
 		}
@@ -323,17 +315,6 @@ class WordHighlighter {
 		this._run();
 	}
 
-	private _getWord(): IWordAtPosition | null {
-		let editorSelection = this.editor.getSelection();
-		let lineNumber = editorSelection.startLineNumber;
-		let startColumn = editorSelection.startColumn;
-
-		return this.model.getWordAtPosition({
-			lineNumber: lineNumber,
-			column: startColumn
-		});
-	}
-
 	private _run(): void {
 		let editorSelection = this.editor.getSelection();
 
@@ -343,10 +324,14 @@ class WordHighlighter {
 			return;
 		}
 
+		let lineNumber = editorSelection.startLineNumber;
 		let startColumn = editorSelection.startColumn;
 		let endColumn = editorSelection.endColumn;
 
-		const word = this._getWord();
+		let word = this.model.getWordAtPosition({
+			lineNumber: lineNumber,
+			column: startColumn
+		});
 
 		// The selection must be inside a word or surround one word at most
 		if (!word || word.startColumn > startColumn || word.endColumn < endColumn) {
@@ -388,7 +373,7 @@ class WordHighlighter {
 			let myRequestId = ++this.workerRequestTokenId;
 			this.workerRequestCompleted = false;
 
-			this.workerRequest = computeOccurencesAtPosition(this.model, this.editor.getSelection(), this.editor.getOption(EditorOption.wordSeparators));
+			this.workerRequest = computeOccurencesAtPosition(this.model, this.editor.getSelection(), this.editor.getConfiguration().wordSeparators);
 
 			this.workerRequest.result.then(data => {
 				if (myRequestId === this.workerRequestTokenId) {
@@ -419,20 +404,19 @@ class WordHighlighter {
 	private renderDecorations(): void {
 		this.renderDecorationsTimer = -1;
 		let decorations: IModelDeltaDecoration[] = [];
-		for (const info of this.workerRequestValue) {
-			if (info.range) {
-				decorations.push({
-					range: info.range,
-					options: WordHighlighter._getDecorationOptions(info.kind)
-				});
-			}
+		for (let i = 0, len = this.workerRequestValue.length; i < len; i++) {
+			let info = this.workerRequestValue[i];
+			decorations.push({
+				range: info.range,
+				options: WordHighlighter._getDecorationOptions(info.kind)
+			});
 		}
 
 		this._decorationIds = this.editor.deltaDecorations(this._decorationIds, decorations);
 		this._hasWordHighlights.set(this.hasDecorations());
 	}
 
-	private static _getDecorationOptions(kind: DocumentHighlightKind | undefined): ModelDecorationOptions {
+	private static _getDecorationOptions(kind: DocumentHighlightKind): ModelDecorationOptions {
 		if (kind === DocumentHighlightKind.Write) {
 			return this._WRITE_OPTIONS;
 		} else if (kind === DocumentHighlightKind.Text) {
@@ -471,67 +455,70 @@ class WordHighlighter {
 
 	public dispose(): void {
 		this._stopAll();
-		this.toUnhook.dispose();
+		this.toUnhook = dispose(this.toUnhook);
 	}
 }
 
-class WordHighlighterContribution extends Disposable implements IEditorContribution {
+class WordHighlighterContribution extends Disposable implements editorCommon.IEditorContribution {
 
-	public static readonly ID = 'editor.contrib.wordHighlighter';
+	private static readonly ID = 'editor.contrib.wordHighlighter';
 
 	public static get(editor: ICodeEditor): WordHighlighterContribution {
 		return editor.getContribution<WordHighlighterContribution>(WordHighlighterContribution.ID);
 	}
 
-	private wordHighlighter: WordHighlighter | null;
+	private wordHighligher: WordHighlighter | null;
 
 	constructor(editor: ICodeEditor, @IContextKeyService contextKeyService: IContextKeyService) {
 		super();
-		this.wordHighlighter = null;
 		const createWordHighlighterIfPossible = () => {
 			if (editor.hasModel()) {
-				this.wordHighlighter = new WordHighlighter(editor, contextKeyService);
+				this.wordHighligher = new WordHighlighter(editor, contextKeyService);
 			}
 		};
 		this._register(editor.onDidChangeModel((e) => {
-			if (this.wordHighlighter) {
-				this.wordHighlighter.dispose();
-				this.wordHighlighter = null;
+			if (this.wordHighligher) {
+				this.wordHighligher.dispose();
+				this.wordHighligher = null;
 			}
 			createWordHighlighterIfPossible();
 		}));
 		createWordHighlighterIfPossible();
 	}
 
+	public getId(): string {
+		return WordHighlighterContribution.ID;
+	}
+
 	public saveViewState(): boolean {
-		if (this.wordHighlighter && this.wordHighlighter.hasDecorations()) {
+		if (this.wordHighligher && this.wordHighligher.hasDecorations()) {
 			return true;
 		}
 		return false;
 	}
 
 	public moveNext() {
-		if (this.wordHighlighter) {
-			this.wordHighlighter.moveNext();
+		if (this.wordHighligher) {
+			this.wordHighligher.moveNext();
 		}
 	}
 
 	public moveBack() {
-		if (this.wordHighlighter) {
-			this.wordHighlighter.moveBack();
+		if (this.wordHighligher) {
+			this.wordHighligher.moveBack();
 		}
 	}
 
 	public restoreViewState(state: boolean | undefined): void {
-		if (this.wordHighlighter && state) {
-			this.wordHighlighter.restore();
+		if (this.wordHighligher && state) {
+			this.wordHighligher.restore();
 		}
 	}
 
 	public dispose(): void {
-		if (this.wordHighlighter) {
-			this.wordHighlighter.dispose();
-			this.wordHighlighter = null;
+		if (this.wordHighligher) {
+			this.wordHighligher.dispose();
+			this.wordHighligher = null;
 		}
 		super.dispose();
 	}
@@ -540,7 +527,7 @@ class WordHighlighterContribution extends Disposable implements IEditorContribut
 
 class WordHighlightNavigationAction extends EditorAction {
 
-	private readonly _isNext: boolean;
+	private _isNext: boolean;
 
 	constructor(next: boolean, opts: IActionOptions) {
 		super(opts);
@@ -618,7 +605,7 @@ class TriggerWordHighlightAction extends EditorAction {
 	}
 }
 
-registerEditorContribution(WordHighlighterContribution.ID, WordHighlighterContribution);
+registerEditorContribution(WordHighlighterContribution);
 registerEditorAction(NextWordHighlightAction);
 registerEditorAction(PrevWordHighlightAction);
 registerEditorAction(TriggerWordHighlightAction);

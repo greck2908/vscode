@@ -5,7 +5,6 @@
   "displayName": "%displayName%",
   "icon": "images/cowboy_hat.png",
   "version": "1.0.0",
-  "license": "MIT",
   "engines": {
     "vscode": "*"
   },
@@ -20,7 +19,7 @@
     "vscode-nls": "^4.0.0"
   },
   "devDependencies": {
-    "@types/node": "^12.19.9"
+    "@types/node": "^8.10.25"
   },
   "main": "./out/main",
   "activationEvents": [

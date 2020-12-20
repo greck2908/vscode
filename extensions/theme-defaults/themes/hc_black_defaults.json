@@ -6,17 +6,23 @@
 		"editor.foreground": "#FFFFFF",
 		"editorIndentGuide.background": "#FFFFFF",
 		"editorIndentGuide.activeBackground": "#FFFFFF",
-		"statusBarItem.remoteBackground": "#00000000",
 		"sideBarTitle.foreground": "#FFFFFF"
 	},
-	"tokenColors": [
+	"settings": [
+		{
+			"settings": {
+				"foreground": "#FFFFFF",
+				"background": "#000000"
+			}
+		},
 		{
 			"scope": [
 				"meta.embedded",
 				"source.groovy.embedded"
 			],
 			"settings": {
-				"foreground": "#FFFFFF"
+				"foreground": "#FFFFFF",
+				"background": "#000000"
 			}
 		},
 		{
@@ -98,7 +104,10 @@
 				"entity.other.attribute-name.parent-selector.css",
 				"entity.other.attribute-name.pseudo-class.css",
 				"entity.other.attribute-name.pseudo-element.css",
+
 				"source.css.less entity.other.attribute-name.id",
+
+				"entity.other.attribute-name.attribute.scss",
 				"entity.other.attribute-name.scss"
 			],
 			"settings": {
@@ -126,7 +135,6 @@
 		{
 			"scope": "markup.heading",
 			"settings": {
-				"fontStyle": "bold",
 				"foreground": "#6796e6"
 			}
 		},
@@ -328,6 +336,5 @@
 				"foreground": "#569cd6"
 			}
 		}
-	],
-	"semanticHighlighting": true
+	]
 }

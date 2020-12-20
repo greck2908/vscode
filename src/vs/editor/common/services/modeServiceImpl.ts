@@ -3,60 +3,28 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Emitter, Event } from 'vs/base/common/event';
-import { Disposable } from 'vs/base/common/lifecycle';
-import { URI } from 'vs/base/common/uri';
+import { onUnexpectedError } from 'vs/base/common/errors';
+import { Event, Emitter } from 'vs/base/common/event';
 import { IMode, LanguageId, LanguageIdentifier } from 'vs/editor/common/modes';
 import { FrankensteinMode } from 'vs/editor/common/modes/abstractMode';
-import { NULL_LANGUAGE_IDENTIFIER } from 'vs/editor/common/modes/nullMode';
 import { LanguagesRegistry } from 'vs/editor/common/services/languagesRegistry';
-import { ILanguageSelection, IModeService } from 'vs/editor/common/services/modeService';
-import { firstOrDefault } from 'vs/base/common/arrays';
-
-class LanguageSelection extends Disposable implements ILanguageSelection {
-
-	public languageIdentifier: LanguageIdentifier;
-
-	private readonly _selector: () => LanguageIdentifier;
-
-	private readonly _onDidChange: Emitter<LanguageIdentifier> = this._register(new Emitter<LanguageIdentifier>());
-	public readonly onDidChange: Event<LanguageIdentifier> = this._onDidChange.event;
-
-	constructor(onLanguagesMaybeChanged: Event<void>, selector: () => LanguageIdentifier) {
-		super();
-		this._selector = selector;
-		this.languageIdentifier = this._selector();
-		this._register(onLanguagesMaybeChanged(() => this._evaluate()));
-	}
-
-	private _evaluate(): void {
-		let languageIdentifier = this._selector();
-		if (languageIdentifier.id === this.languageIdentifier.id) {
-			// no change
-			return;
-		}
-		this.languageIdentifier = languageIdentifier;
-		this._onDidChange.fire(this.languageIdentifier);
-	}
-}
+import { IModeService } from 'vs/editor/common/services/modeService';
+import { URI } from 'vs/base/common/uri';
+import { NULL_LANGUAGE_IDENTIFIER } from 'vs/editor/common/modes/nullMode';
 
 export class ModeServiceImpl implements IModeService {
-	public _serviceBrand: undefined;
+	public _serviceBrand: any;
 
 	private readonly _instantiatedModes: { [modeId: string]: IMode; };
 	private readonly _registry: LanguagesRegistry;
 
-	private readonly _onDidCreateMode = new Emitter<IMode>();
+	private readonly _onDidCreateMode: Emitter<IMode> = new Emitter<IMode>();
 	public readonly onDidCreateMode: Event<IMode> = this._onDidCreateMode.event;
-
-	protected readonly _onLanguagesMaybeChanged = new Emitter<void>();
-	public readonly onLanguagesMaybeChanged: Event<void> = this._onLanguagesMaybeChanged.event;
 
 	constructor(warnOnOverwrite = false) {
 		this._instantiatedModes = {};
 
 		this._registry = new LanguagesRegistry(true, warnOnOverwrite);
-		this._registry.onDidChange(() => this._onLanguagesMaybeChanged.fire());
 	}
 
 	protected _onReady(): Promise<boolean> {
@@ -95,14 +63,24 @@ export class ModeServiceImpl implements IModeService {
 		return this._registry.getModeIdForLanguageNameLowercase(alias);
 	}
 
-	public getModeIdByFilepathOrFirstLine(resource: URI | null, firstLine?: string): string | null {
-		const modeIds = this._registry.getModeIdsFromFilepathOrFirstLine(resource, firstLine);
-		return firstOrDefault(modeIds, null);
+	public getModeIdByFilepathOrFirstLine(filepath: string, firstLine?: string): string | null {
+		const modeIds = this._registry.getModeIdsFromFilepathOrFirstLine(filepath, firstLine);
+
+		if (modeIds.length > 0) {
+			return modeIds[0];
+		}
+
+		return null;
 	}
 
-	public getModeId(commaSeparatedMimetypesOrCommaSeparatedIds: string | undefined): string | null {
+	public getModeId(commaSeparatedMimetypesOrCommaSeparatedIds: string): string | null {
 		const modeIds = this._registry.extractModeIds(commaSeparatedMimetypesOrCommaSeparatedIds);
-		return firstOrDefault(modeIds, null);
+
+		if (modeIds.length > 0) {
+			return modeIds[0];
+		}
+
+		return null;
 	}
 
 	public getLanguageIdentifier(modeId: string | LanguageId): LanguageIdentifier | null {
@@ -115,47 +93,60 @@ export class ModeServiceImpl implements IModeService {
 
 	// --- instantiation
 
-	public create(commaSeparatedMimetypesOrCommaSeparatedIds: string | undefined): ILanguageSelection {
-		return new LanguageSelection(this.onLanguagesMaybeChanged, () => {
+	public getMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): IMode | null {
+		const modeIds = this._registry.extractModeIds(commaSeparatedMimetypesOrCommaSeparatedIds);
+
+		let isPlainText = false;
+		for (let i = 0; i < modeIds.length; i++) {
+			if (this._instantiatedModes.hasOwnProperty(modeIds[i])) {
+				return this._instantiatedModes[modeIds[i]];
+			}
+			isPlainText = isPlainText || (modeIds[i] === 'plaintext');
+		}
+
+		if (isPlainText) {
+			// Try to do it synchronously
+			let r: IMode | null = null;
+			this.getOrCreateMode(commaSeparatedMimetypesOrCommaSeparatedIds).then((mode) => {
+				r = mode;
+			}, onUnexpectedError);
+			return r;
+		}
+		return null;
+	}
+
+	public getOrCreateMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): Promise<IMode> {
+		return this._onReady().then(() => {
 			const modeId = this.getModeId(commaSeparatedMimetypesOrCommaSeparatedIds);
-			return this._createModeAndGetLanguageIdentifier(modeId);
+			// Fall back to plain text if no mode was found
+			return this._getOrCreateMode(modeId || 'plaintext');
 		});
 	}
 
-	public createByLanguageName(languageName: string): ILanguageSelection {
-		return new LanguageSelection(this.onLanguagesMaybeChanged, () => {
+	public getOrCreateModeByLanguageName(languageName: string): Promise<IMode> {
+		return this._onReady().then(() => {
 			const modeId = this._getModeIdByLanguageName(languageName);
-			return this._createModeAndGetLanguageIdentifier(modeId);
+			// Fall back to plain text if no mode was found
+			return this._getOrCreateMode(modeId || 'plaintext');
 		});
-	}
-
-	public createByFilepathOrFirstLine(resource: URI | null, firstLine?: string): ILanguageSelection {
-		return new LanguageSelection(this.onLanguagesMaybeChanged, () => {
-			const modeId = this.getModeIdByFilepathOrFirstLine(resource, firstLine);
-			return this._createModeAndGetLanguageIdentifier(modeId);
-		});
-	}
-
-	private _createModeAndGetLanguageIdentifier(modeId: string | null): LanguageIdentifier {
-		// Fall back to plain text if no mode was found
-		const languageIdentifier = this.getLanguageIdentifier(modeId || 'plaintext') || NULL_LANGUAGE_IDENTIFIER;
-		this._getOrCreateMode(languageIdentifier.language);
-		return languageIdentifier;
-	}
-
-	public triggerMode(commaSeparatedMimetypesOrCommaSeparatedIds: string): void {
-		const modeId = this.getModeId(commaSeparatedMimetypesOrCommaSeparatedIds);
-		// Fall back to plain text if no mode was found
-		this._getOrCreateMode(modeId || 'plaintext');
-	}
-
-	public waitForLanguageRegistration(): Promise<void> {
-		return this._onReady().then(() => { });
 	}
 
 	private _getModeIdByLanguageName(languageName: string): string | null {
 		const modeIds = this._registry.getModeIdsFromLanguageName(languageName);
-		return firstOrDefault(modeIds, null);
+
+		if (modeIds.length > 0) {
+			return modeIds[0];
+		}
+
+		return null;
+	}
+
+	public getOrCreateModeByFilepathOrFirstLine(filepath: string, firstLine?: string): Promise<IMode> {
+		return this._onReady().then(() => {
+			const modeId = this.getModeIdByFilepathOrFirstLine(filepath, firstLine);
+			// Fall back to plain text if no mode was found
+			return this._getOrCreateMode(modeId || 'plaintext');
+		});
 	}
 
 	private _getOrCreateMode(modeId: string): IMode {

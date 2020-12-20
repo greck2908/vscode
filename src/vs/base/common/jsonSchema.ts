@@ -3,13 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export type JSONSchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array' | 'object';
-
 export interface IJSONSchema {
 	id?: string;
 	$id?: string;
 	$schema?: string;
-	type?: JSONSchemaType | JSONSchemaType[];
+	type?: string | string[];
 	title?: string;
 	default?: any;
 	definitions?: IJSONSchemaMap;
@@ -53,19 +51,16 @@ export interface IJSONSchema {
 	then?: IJSONSchema;
 	else?: IJSONSchema;
 
-	// VS Code extensions
-	defaultSnippets?: IJSONSchemaSnippet[];
-	errorMessage?: string;
-	patternErrorMessage?: string;
-	deprecationMessage?: string;
-	markdownDeprecationMessage?: string;
-	enumDescriptions?: string[];
-	markdownEnumDescriptions?: string[];
-	markdownDescription?: string;
-	doNotSuggest?: boolean;
-	suggestSortText?: string;
-	allowComments?: boolean;
-	allowTrailingCommas?: boolean;
+	// VSCode extensions
+	defaultSnippets?: IJSONSchemaSnippet[]; // VSCode extension
+	errorMessage?: string; // VSCode extension
+	patternErrorMessage?: string; // VSCode extension
+	deprecationMessage?: string; // VSCode extension
+	enumDescriptions?: string[]; // VSCode extension
+	markdownEnumDescriptions?: string[]; // VSCode extension
+	markdownDescription?: string; // VSCode extension
+	doNotSuggest?: boolean; // VSCode extension
+	allowComments?: boolean; // VSCode extension
 }
 
 export interface IJSONSchemaMap {

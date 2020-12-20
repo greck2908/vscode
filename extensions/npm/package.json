@@ -4,7 +4,6 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "1.0.1",
-  "license": "MIT",
   "engines": {
     "vscode": "0.10.x"
   },
@@ -18,42 +17,27 @@
     "watch": "gulp watch-extension:npm"
   },
   "dependencies": {
-    "find-up": "^4.1.0",
-    "find-yarn-workspace-root": "^2.0.0",
-    "jsonc-parser": "^2.2.1",
+    "jsonc-parser": "^2.0.2",
     "minimatch": "^3.0.4",
-    "request-light": "^0.4.0",
-    "vscode-nls": "^4.1.1",
-    "which-pm": "^2.0.0"
+    "request-light": "^0.2.4",
+    "vscode-nls": "^4.0.0"
   },
   "devDependencies": {
     "@types/minimatch": "^3.0.3",
-    "@types/node": "^12.19.9"
+    "@types/node": "^8.10.25"
   },
-  "resolutions": {
-    "which-pm/load-yaml-file/**/argparse": "1.0.9"
-  },
-  "main": "./out/npmMain",
-  "browser": "./dist/browser/npmBrowserMain",
+  "main": "./out/main",
   "activationEvents": [
     "onCommand:workbench.action.tasks.runTask",
-    "onCommand:npm.runScriptFromFolder",
     "onLanguage:json",
-    "workspaceContains:package.json",
     "onView:npm"
   ],
   "contributes": {
     "languages": [
       {
         "id": "ignore",
-        "extensions": [
+        "filenames": [
           ".npmignore"
-        ]
-      },
-      {
-        "id": "properties",
-        "extensions": [
-          ".npmrc"
         ]
       }
     ],
@@ -62,8 +46,7 @@
         {
           "id": "npm",
           "name": "%view.name%",
-          "icon": "$(code)",
-          "visibility": "hidden"
+          "when": "config.npm.enableScriptExplorer"
         }
       ]
     },
@@ -71,12 +54,18 @@
       {
         "command": "npm.runScript",
         "title": "%command.run%",
-        "icon": "$(run)"
+        "icon": {
+          "light": "resources/light/continue.svg",
+          "dark": "resources/dark/continue.svg"
+        }
       },
       {
         "command": "npm.debugScript",
         "title": "%command.debug%",
-        "icon": "$(debug)"
+        "icon": {
+          "light": "resources/light/debug.svg",
+          "dark": "resources/dark/debug.svg"
+        }
       },
       {
         "command": "npm.openScript",
@@ -89,19 +78,14 @@
       {
         "command": "npm.refresh",
         "title": "%command.refresh%",
-        "icon": "$(refresh)"
+        "icon": {
+          "light": "resources/light/refresh.svg",
+          "dark": "resources/dark/refresh.svg"
+        }
       },
       {
         "command": "npm.runSelectedScript",
         "title": "%command.runSelectedScript%"
-      },
-      {
-        "command": "npm.runScriptFromFolder",
-        "title": "%command.runScriptFromFolder%"
-      },
-      {
-        "command": "npm.packageManager",
-        "title": "%command.packageManager"
       }
     ],
     "menus": {
@@ -129,20 +113,12 @@
         {
           "command": "npm.runSelectedScript",
           "when": "false"
-        },
-        {
-          "command": "npm.runScriptFromFolder",
-          "when": "false"
-        },
-        {
-          "command": "npm.packageManager",
-          "when": "false"
         }
       ],
       "editor/context": [
         {
           "command": "npm.runSelectedScript",
-          "when": "resourceFilename == 'package.json' && resourceScheme == file",
+          "when": "resourceFilename == 'package.json'",
           "group": "navigation@+1"
         }
       ],
@@ -180,21 +156,19 @@
           "group": "inline"
         },
         {
+          "command": "npm.runScript",
+          "when": "view == npm && viewItem == debugScript",
+          "group": "inline"
+        },
+        {
           "command": "npm.debugScript",
-          "when": "view == npm && viewItem == script",
+          "when": "view == npm && viewItem == debugScript",
           "group": "inline"
         },
         {
           "command": "npm.debugScript",
           "when": "view == npm && viewItem == script",
           "group": "navigation@3"
-        }
-      ],
-      "explorer/context": [
-        {
-          "when": "config.npm.enableRunFromFolder && explorerViewletVisible && explorerResourceIsFolder && resourceScheme == file",
-          "command": "npm.runScriptFromFolder",
-          "group": "2_workspace"
         }
       ]
     },
@@ -223,18 +197,10 @@
           "scope": "resource",
           "type": "string",
           "enum": [
-            "auto",
             "npm",
-            "yarn",
-            "pnpm"
+            "yarn"
           ],
-          "enumDescriptions": [
-            "%config.npm.packageManager.auto%",
-            "%config.npm.packageManager.npm%",
-            "%config.npm.packageManager.yarn%",
-            "%config.npm.packageManager.pnpm%"
-          ],
-          "default": "auto",
+          "default": "npm",
           "description": "%config.npm.packageManager%"
         },
         "npm.exclude": {
@@ -252,14 +218,7 @@
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "deprecationMessage": "The NPM Script Explorer is now available in 'Views' menu in the Explorer in all folders.",
           "description": "%config.npm.enableScriptExplorer%"
-        },
-        "npm.enableRunFromFolder": {
-          "type": "boolean",
-          "default": false,
-          "scope": "resource",
-          "description": "%config.npm.enableRunFromFolder%"
         },
         "npm.scriptExplorerAction": {
           "type": "string",
@@ -285,11 +244,11 @@
     "jsonValidation": [
       {
         "fileMatch": "package.json",
-        "url": "https://json.schemastore.org/package"
+        "url": "https://schemastore.azurewebsites.net/schemas/json/package.json"
       },
       {
         "fileMatch": "bower.json",
-        "url": "https://json.schemastore.org/bower"
+        "url": "https://schemastore.azurewebsites.net/schemas/json/bower.json"
       }
     ],
     "taskDefinitions": [
@@ -307,8 +266,7 @@
             "type": "string",
             "description": "%taskdef.path%"
           }
-        },
-        "when": "shellExecutionSupported"
+        }
       }
     ]
   }

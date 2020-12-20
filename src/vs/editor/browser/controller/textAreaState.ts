@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as strings from 'vs/base/common/strings';
-import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
+import { Position } from 'vs/editor/common/core/position';
 import { EndOfLinePreference } from 'vs/editor/common/model';
+import * as strings from 'vs/base/common/strings';
 
 export interface ITextAreaWrapper {
 	getValue(): string;
@@ -96,7 +96,7 @@ export class TextAreaState {
 		return new TextAreaState(text, 0, text.length, null, null);
 	}
 
-	public static deduceInput(previousState: TextAreaState, currentState: TextAreaState, couldBeEmojiInput: boolean): ITypeData {
+	public static deduceInput(previousState: TextAreaState, currentState: TextAreaState, couldBeEmojiInput: boolean, couldBeTypingAtOffset0: boolean): ITypeData {
 		if (!previousState) {
 			// This is the EMPTY state
 			return {
@@ -115,6 +115,18 @@ export class TextAreaState {
 		let currentValue = currentState.value;
 		let currentSelectionStart = currentState.selectionStart;
 		let currentSelectionEnd = currentState.selectionEnd;
+
+		if (couldBeTypingAtOffset0 && previousValue.length > 0 && previousSelectionStart === previousSelectionEnd && currentSelectionStart === currentSelectionEnd) {
+			// See https://github.com/Microsoft/vscode/issues/42251
+			// where typing always happens at offset 0 in the textarea
+			// when using a custom title area in OSX and moving the window
+			if (!strings.startsWith(currentValue, previousValue) && strings.endsWith(currentValue, previousValue)) {
+				// Looks like something was typed at offset 0
+				// ==> pretend we placed the cursor at offset 0 to begin with...
+				previousSelectionStart = 0;
+				previousSelectionEnd = 0;
+			}
+		}
 
 		// Strip the previous suffix from the value (without interfering with the current selection)
 		const previousSuffix = previousValue.substring(previousSelectionEnd);
@@ -145,13 +157,13 @@ export class TextAreaState {
 
 			if (currentSelectionStart === currentValue.length) {
 				// emoji potentially inserted "somewhere" after the previous selection => it should appear at the end of `currentValue`
-				if (currentValue.startsWith(previousValue)) {
+				if (strings.startsWith(currentValue, previousValue)) {
 					// only if all of the old text is accounted for
 					potentialEmojiInput = currentValue.substring(previousValue.length);
 				}
 			} else {
 				// emoji potentially inserted "somewhere" before the previous selection => it should appear at the start of `currentValue`
-				if (currentValue.endsWith(previousValue)) {
+				if (strings.endsWith(currentValue, previousValue)) {
 					// only if all of the old text is accounted for
 					potentialEmojiInput = currentValue.substring(0, currentValue.length - previousValue.length);
 				}
@@ -214,31 +226,33 @@ export class TextAreaState {
 }
 
 export class PagedScreenReaderStrategy {
-	private static _getPageOfLine(lineNumber: number, linesPerPage: number): number {
-		return Math.floor((lineNumber - 1) / linesPerPage);
+	private static readonly _LINES_PER_PAGE = 10;
+
+	private static _getPageOfLine(lineNumber: number): number {
+		return Math.floor((lineNumber - 1) / PagedScreenReaderStrategy._LINES_PER_PAGE);
 	}
 
-	private static _getRangeForPage(page: number, linesPerPage: number): Range {
-		const offset = page * linesPerPage;
-		const startLineNumber = offset + 1;
-		const endLineNumber = offset + linesPerPage;
+	private static _getRangeForPage(page: number): Range {
+		let offset = page * PagedScreenReaderStrategy._LINES_PER_PAGE;
+		let startLineNumber = offset + 1;
+		let endLineNumber = offset + PagedScreenReaderStrategy._LINES_PER_PAGE;
 		return new Range(startLineNumber, 1, endLineNumber + 1, 1);
 	}
 
-	public static fromEditorSelection(previousState: TextAreaState, model: ISimpleModel, selection: Range, linesPerPage: number, trimLongText: boolean): TextAreaState {
+	public static fromEditorSelection(previousState: TextAreaState, model: ISimpleModel, selection: Range, trimLongText: boolean): TextAreaState {
 
-		const selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber, linesPerPage);
-		const selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage, linesPerPage);
+		let selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber);
+		let selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage);
 
-		const selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber, linesPerPage);
-		const selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage, linesPerPage);
+		let selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber);
+		let selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage);
 
-		const pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
+		let pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
 		let pretext = model.getValueInRange(pretextRange, EndOfLinePreference.LF);
 
-		const lastLine = model.getLineCount();
-		const lastLineMaxColumn = model.getLineMaxColumn(lastLine);
-		const posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, lastLineMaxColumn))!;
+		let lastLine = model.getLineCount();
+		let lastLineMaxColumn = model.getLineMaxColumn(lastLine);
+		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, lastLineMaxColumn))!;
 		let posttext = model.getValueInRange(posttextRange, EndOfLinePreference.LF);
 
 
@@ -247,8 +261,8 @@ export class PagedScreenReaderStrategy {
 			// take full selection
 			text = model.getValueInRange(selection, EndOfLinePreference.LF);
 		} else {
-			const selectionRange1 = selectionStartPageRange.intersectRanges(selection)!;
-			const selectionRange2 = selectionEndPageRange.intersectRanges(selection)!;
+			let selectionRange1 = selectionStartPageRange.intersectRanges(selection)!;
+			let selectionRange2 = selectionEndPageRange.intersectRanges(selection)!;
 			text = (
 				model.getValueInRange(selectionRange1, EndOfLinePreference.LF)
 				+ String.fromCharCode(8230)

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
 	realpath() { [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"; }
@@ -18,7 +18,7 @@ else
 fi
 
 # Get electron
-yarn electron
+node build/lib/electron.js || ./node_modules/.bin/gulp electron
 
 popd
 

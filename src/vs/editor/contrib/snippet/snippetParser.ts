@@ -56,8 +56,12 @@ export class Scanner {
 			|| (ch >= CharCode.A && ch <= CharCode.Z);
 	}
 
-	value: string = '';
-	pos: number = 0;
+	value: string;
+	pos: number;
+
+	constructor() {
+		this.text('');
+	}
 
 	text(value: string) {
 		this.value = value;
@@ -131,7 +135,7 @@ export abstract class Marker {
 
 	readonly _markerBrand: any;
 
-	public parent!: Marker;
+	public parent: Marker;
 	protected _children: Marker[] = [];
 
 	appendChild(child: Marker): this {
@@ -215,7 +219,7 @@ export class Text extends Marker {
 }
 
 export abstract class TransformableMarker extends Marker {
-	public transform?: Transform;
+	public transform: Transform;
 }
 
 export class Placeholder extends TransformableMarker {
@@ -310,7 +314,7 @@ export class Choice extends Marker {
 
 export class Transform extends Marker {
 
-	regexp: RegExp = new RegExp('');
+	regexp: RegExp;
 
 	resolve(value: string): string {
 		const _this = this;
@@ -369,7 +373,7 @@ export class FormatString extends Marker {
 		super();
 	}
 
-	resolve(value?: string): string {
+	resolve(value: string): string {
 		if (this.shorthandName === 'upcase') {
 			return !value ? '' : value.toLocaleUpperCase();
 		} else if (this.shorthandName === 'downcase') {
@@ -586,12 +590,8 @@ export class SnippetParser {
 		return value.replace(/\$|}|\\/g, '\\$&');
 	}
 
-	static guessNeedsClipboard(template: string): boolean {
-		return /\${?CLIPBOARD/.test(template);
-	}
-
-	private _scanner: Scanner = new Scanner();
-	private _token: Token = { type: TokenType.EOF, pos: 0, len: 0 };
+	private _scanner = new Scanner();
+	private _token: Token;
 
 	text(value: string): string {
 		return this.parse(value).toString();
@@ -609,7 +609,7 @@ export class SnippetParser {
 
 		// fill in values for placeholders. the first placeholder of an index
 		// that has a value defines the value for all placeholders with that index
-		const placeholderDefaultValues = new Map<number, Marker[] | undefined>();
+		const placeholderDefaultValues = new Map<number, Marker[]>();
 		const incompletePlaceholders: Placeholder[] = [];
 		let placeholderCount = 0;
 		snippet.walk(marker => {
@@ -626,11 +626,10 @@ export class SnippetParser {
 			return true;
 		});
 		for (const placeholder of incompletePlaceholders) {
-			const defaultValues = placeholderDefaultValues.get(placeholder.index);
-			if (defaultValues) {
+			if (placeholderDefaultValues.has(placeholder.index)) {
 				const clone = new Placeholder(placeholder.index);
 				clone.transform = placeholder.transform;
-				for (const child of defaultValues) {
+				for (const child of placeholderDefaultValues.get(placeholder.index)) {
 					clone.appendChild(child.clone());
 				}
 				snippet.replace(placeholder, [clone]);
@@ -668,21 +667,17 @@ export class SnippetParser {
 	}
 
 	private _until(type: TokenType): false | string {
-		const start = this._token;
+		if (this._token.type === TokenType.EOF) {
+			return false;
+		}
+		let start = this._token;
 		while (this._token.type !== type) {
+			this._token = this._scanner.next();
 			if (this._token.type === TokenType.EOF) {
 				return false;
-			} else if (this._token.type === TokenType.Backslash) {
-				const nextToken = this._scanner.next();
-				if (nextToken.type !== TokenType.Dollar
-					&& nextToken.type !== TokenType.CurlyClose
-					&& nextToken.type !== TokenType.Backslash) {
-					return false;
-				}
 			}
-			this._token = this._scanner.next();
 		}
-		const value = this._scanner.value.substring(start.pos, this._token.pos).replace(/\\(\$|}|\\)/g, '$1');
+		let value = this._scanner.value.substring(start.pos, this._token.pos);
 		this._token = this._scanner.next();
 		return value;
 	}
@@ -934,7 +929,7 @@ export class SnippetParser {
 
 			let escaped: string;
 			if (escaped = this._accept(TokenType.Backslash, true)) {
-				escaped = this._accept(TokenType.Backslash, true) || this._accept(TokenType.Forwardslash, true) || escaped;
+				escaped = this._accept(TokenType.Forwardslash, true) || escaped;
 				transform.appendChild(new Text(escaped));
 				continue;
 			}

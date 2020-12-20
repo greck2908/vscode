@@ -4,15 +4,13 @@
 	"description": "%description%",
 	"version": "1.0.0",
 	"publisher": "vscode",
-	"license": "MIT",
 	"engines": {
 		"vscode": "*"
 	},
 	"contributes": {
 		"themes": [
 			{
-				"id": "Monokai",
-				"label": "%themeLabel%",
+				"label": "Monokai",
 				"uiTheme": "vs-dark",
 				"path": "./themes/monokai-color-theme.json"
 			}
