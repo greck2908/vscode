@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.minifyTask = exports.optimizeTask = exports.loaderConfig = void 0;
 const es = require("event-stream");
 const gulp = require("gulp");
 const concat = require("gulp-concat");
@@ -13,10 +14,11 @@ const flatmap = require("gulp-flatmap");
 const sourcemaps = require("gulp-sourcemaps");
 const uglify = require("gulp-uglify");
 const composer = require("gulp-uglify/composer");
-const gulpUtil = require("gulp-util");
+const fancyLog = require("fancy-log");
+const ansiColors = require("ansi-colors");
 const path = require("path");
 const pump = require("pump");
-const uglifyes = require("uglify-es");
+const terser = require("terser");
 const VinylFile = require("vinyl");
 const bundle = require("./bundle");
 const i18n_1 = require("./i18n");
@@ -24,15 +26,15 @@ const stats_1 = require("./stats");
 const util = require("./util");
 const REPO_ROOT_PATH = path.join(__dirname, '../..');
 function log(prefix, message) {
-    gulpUtil.log(gulpUtil.colors.cyan('[' + prefix + ']'), message);
+    fancyLog(ansiColors.cyan('[' + prefix + ']'), message);
 }
-function loaderConfig(emptyPaths) {
+function loaderConfig() {
     const result = {
         paths: {
             'vs': 'out-build/vs',
             'vscode': 'empty:'
         },
-        nodeModules: emptyPaths || []
+        amdModulesPattern: /^vs\//
     };
     result['vs/css'] = { inlineResources: true };
     return result;
@@ -57,7 +59,7 @@ function loader(src, bundledFileHeader, bundleLoader) {
             isFirst = false;
             this.emit('data', new VinylFile({
                 path: 'fake',
-                base: '',
+                base: '.',
                 contents: Buffer.from(bundledFileHeader)
             }));
             this.emit('data', data);
@@ -66,14 +68,9 @@ function loader(src, bundledFileHeader, bundleLoader) {
             this.emit('data', data);
         }
     }))
-        .pipe(util.loadSourcemaps())
-        .pipe(concat('vs/loader.js'))
-        .pipe(es.mapSync(function (f) {
-        f.sourceMap.sourceRoot = util.toFileUri(path.join(REPO_ROOT_PATH, 'src'));
-        return f;
-    })));
+        .pipe(concat('vs/loader.js')));
 }
-function toConcatStream(src, bundledFileHeader, sources, dest) {
+function toConcatStream(src, bundledFileHeader, sources, dest, fileContentMapper) {
     const useSourcemaps = /\.js$/.test(dest) && !/\.nls\.js$/.test(dest);
     // If a bundle ends up including in any of the sources our copyright, then
     // insert a fake source at the beginning of each bundle with our copyright
@@ -93,11 +90,13 @@ function toConcatStream(src, bundledFileHeader, sources, dest) {
     }
     const treatedSources = sources.map(function (source) {
         const root = source.path ? REPO_ROOT_PATH.replace(/\\/g, '/') : '';
-        const base = source.path ? root + `/${src}` : '';
+        const base = source.path ? root + `/${src}` : '.';
+        const path = source.path ? root + '/' + source.path.replace(/\\/g, '/') : 'fake';
+        const contents = source.path ? fileContentMapper(source.contents, path) : source.contents;
         return new VinylFile({
-            path: source.path ? root + '/' + source.path.replace(/\\/g, '/') : 'fake',
+            path: path,
             base: base,
-            contents: Buffer.from(source.contents)
+            contents: Buffer.from(contents)
         });
     });
     return es.readArray(treatedSources)
@@ -105,20 +104,25 @@ function toConcatStream(src, bundledFileHeader, sources, dest) {
         .pipe(concat(dest))
         .pipe(stats_1.createStatsStream(dest));
 }
-function toBundleStream(src, bundledFileHeader, bundles) {
+function toBundleStream(src, bundledFileHeader, bundles, fileContentMapper) {
     return es.merge(bundles.map(function (bundle) {
-        return toConcatStream(src, bundledFileHeader, bundle.sources, bundle.dest);
+        return toConcatStream(src, bundledFileHeader, bundle.sources, bundle.dest, fileContentMapper);
     }));
 }
+const DEFAULT_FILE_HEADER = [
+    '/*!--------------------------------------------------------',
+    ' * Copyright (C) Microsoft Corporation. All rights reserved.',
+    ' *--------------------------------------------------------*/'
+].join('\n');
 function optimizeTask(opts) {
     const src = opts.src;
     const entryPoints = opts.entryPoints;
-    const otherSources = opts.otherSources;
     const resources = opts.resources;
     const loaderConfig = opts.loaderConfig;
-    const bundledFileHeader = opts.header;
+    const bundledFileHeader = opts.header || DEFAULT_FILE_HEADER;
     const bundleLoader = (typeof opts.bundleLoader === 'undefined' ? true : opts.bundleLoader);
     const out = opts.out;
+    const fileContentMapper = opts.fileContentMapper || ((contents, _path) => contents);
     return function () {
         const bundlesStream = es.through(); // this stream will contain the bundled files
         const resourcesStream = es.through(); // this stream will contain the resources
@@ -127,7 +131,7 @@ function optimizeTask(opts) {
             if (err || !result) {
                 return bundlesStream.emit('error', JSON.stringify(err));
             }
-            toBundleStream(src, bundledFileHeader, result.files).pipe(bundlesStream);
+            toBundleStream(src, bundledFileHeader, result.files, fileContentMapper).pipe(bundlesStream);
             // Remove css inlined resources
             const filteredResources = resources.slice();
             result.cssInlinedResources.forEach(function (resource) {
@@ -136,7 +140,7 @@ function optimizeTask(opts) {
                 }
                 filteredResources.push('!' + resource);
             });
-            gulp.src(filteredResources, { base: `${src}` }).pipe(resourcesStream);
+            gulp.src(filteredResources, { base: `${src}`, allowEmpty: true }).pipe(resourcesStream);
             const bundleInfoArray = [];
             if (opts.bundleInfo) {
                 bundleInfoArray.push(new VinylFile({
@@ -147,20 +151,7 @@ function optimizeTask(opts) {
             }
             es.readArray(bundleInfoArray).pipe(bundleInfoStream);
         });
-        const otherSourcesStream = es.through();
-        const otherSourcesStreamArr = [];
-        gulp.src(otherSources, { base: `${src}` })
-            .pipe(es.through(function (data) {
-            otherSourcesStreamArr.push(toConcatStream(src, bundledFileHeader, [data], data.relative));
-        }, function () {
-            if (!otherSourcesStreamArr.length) {
-                setTimeout(function () { otherSourcesStream.emit('end'); }, 0);
-            }
-            else {
-                es.merge(otherSourcesStreamArr).pipe(otherSourcesStream);
-            }
-        }));
-        const result = es.merge(loader(src, bundledFileHeader, bundleLoader), bundlesStream, otherSourcesStream, resourcesStream, bundleInfoStream);
+        const result = es.merge(loader(src, bundledFileHeader, bundleLoader), bundlesStream, resourcesStream, bundleInfoStream);
         return result
             .pipe(sourcemaps.write('./', {
             sourceRoot: undefined,
@@ -205,7 +196,7 @@ function uglifyWithCopyrights() {
             return false;
         };
     };
-    const minify = composer(uglifyes);
+    const minify = composer(terser);
     const input = es.through();
     const output = input
         .pipe(flatmap((stream, f) => {
@@ -223,7 +214,12 @@ function minifyTask(src, sourceMapBaseUrl) {
     return cb => {
         const jsFilter = filter('**/*.js', { restore: true });
         const cssFilter = filter('**/*.css', { restore: true });
-        pump(gulp.src([src + '/**', '!' + src + '/**/*.map']), jsFilter, sourcemaps.init({ loadMaps: true }), uglifyWithCopyrights(), jsFilter.restore, cssFilter, minifyCSS({ reduceIdents: false }), cssFilter.restore, sourcemaps.write('./', {
+        pump(gulp.src([src + '/**', '!' + src + '/**/*.map']), jsFilter, sourcemaps.init({ loadMaps: true }), uglifyWithCopyrights(), jsFilter.restore, cssFilter, minifyCSS({ reduceIdents: false }), cssFilter.restore, sourcemaps.mapSources((sourcePath) => {
+            if (sourcePath === 'bootstrap-fork.js') {
+                return 'bootstrap-fork.orig.js';
+            }
+            return sourcePath;
+        }), sourcemaps.write('./', {
             sourceMappingURL,
             sourceRoot: undefined,
             includeContent: true,

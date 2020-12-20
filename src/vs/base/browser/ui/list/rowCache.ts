@@ -5,7 +5,7 @@
 
 import { IListRenderer } from './list';
 import { IDisposable } from 'vs/base/common/lifecycle';
-import { $, removeClass } from 'vs/base/browser/dom';
+import { $ } from 'vs/base/browser/dom';
 
 export interface IRow {
 	domNode: HTMLElement | null;
@@ -38,7 +38,7 @@ export class RowCache<T> implements IDisposable {
 
 		if (!result) {
 			const domNode = $('.monaco-list-row');
-			const renderer = this.renderers.get(templateId);
+			const renderer = this.getRenderer(templateId);
 			const templateData = renderer.renderTemplate(domNode);
 			result = { domNode, templateId, templateData };
 		}
@@ -60,7 +60,7 @@ export class RowCache<T> implements IDisposable {
 	private releaseRow(row: IRow): void {
 		const { domNode, templateId } = row;
 		if (domNode) {
-			removeClass(domNode, 'scrolling');
+			domNode.classList.remove('scrolling');
 			removeFromParent(domNode);
 		}
 
@@ -79,14 +79,10 @@ export class RowCache<T> implements IDisposable {
 		return result;
 	}
 
-	private garbageCollect(): void {
-		if (!this.renderers) {
-			return;
-		}
-
+	dispose(): void {
 		this.cache.forEach((cachedRows, templateId) => {
 			for (const cachedRow of cachedRows) {
-				const renderer = this.renderers.get(templateId);
+				const renderer = this.getRenderer(templateId);
 				renderer.disposeTemplate(cachedRow.templateData);
 				cachedRow.domNode = null;
 				cachedRow.templateData = null;
@@ -96,9 +92,11 @@ export class RowCache<T> implements IDisposable {
 		this.cache.clear();
 	}
 
-	dispose(): void {
-		this.garbageCollect();
-		this.cache.clear();
-		this.renderers = null!; // StrictNullOverride: nulling out ok in dispose
+	private getRenderer(templateId: string): IListRenderer<T, any> {
+		const renderer = this.renderers.get(templateId);
+		if (!renderer) {
+			throw new Error(`No renderer found for ${templateId}`);
+		}
+		return renderer;
 	}
 }

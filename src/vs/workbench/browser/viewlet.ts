@@ -6,47 +6,50 @@
 import * as nls from 'vs/nls';
 import * as DOM from 'vs/base/browser/dom';
 import { Registry } from 'vs/platform/registry/common/platform';
-import { Action, IAction } from 'vs/base/common/actions';
-import { ITree } from 'vs/base/parts/tree/browser/tree';
+import { Action } from 'vs/base/common/actions';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { IViewlet } from 'vs/workbench/common/viewlet';
-import { Composite, CompositeDescriptor, CompositeRegistry } from 'vs/workbench/browser/composite';
-import { IConstructorSignature0 } from 'vs/platform/instantiation/common/instantiation';
-import { ToggleSidebarVisibilityAction } from 'vs/workbench/browser/actions/toggleSidebarVisibility';
+import { CompositeDescriptor, CompositeRegistry } from 'vs/workbench/browser/composite';
+import { IConstructorSignature0, IInstantiationService, BrandedService } from 'vs/platform/instantiation/common/instantiation';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { IPartService, Parts } from 'vs/workbench/services/part/common/partService';
+import { IWorkbenchLayoutService, Parts } from 'vs/workbench/services/layout/browser/layoutService';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
-import { IEditorGroupsService } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { URI } from 'vs/base/common/uri';
-import { ToggleSidebarPositionAction } from 'vs/workbench/browser/actions/toggleSidebarPosition';
-import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IStorageService } from 'vs/platform/storage/common/storage';
+import { AsyncDataTree } from 'vs/base/browser/ui/tree/asyncDataTree';
+import { AbstractTree } from 'vs/base/browser/ui/tree/abstractTree';
+import { ViewPaneContainer } from 'vs/workbench/browser/parts/views/viewPaneContainer';
+import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
+import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
+import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { PaneComposite } from 'vs/workbench/browser/panecomposite';
+import { Event } from 'vs/base/common/event';
+import { FilterViewPaneContainer } from 'vs/workbench/browser/parts/views/viewsViewlet';
 
-export abstract class Viewlet extends Composite implements IViewlet {
+export abstract class Viewlet extends PaneComposite implements IViewlet {
 
 	constructor(id: string,
-		protected configurationService: IConfigurationService,
-		private partService: IPartService,
-		telemetryService: ITelemetryService,
-		themeService: IThemeService,
-		storageService: IStorageService
+		viewPaneContainer: ViewPaneContainer,
+		@ITelemetryService telemetryService: ITelemetryService,
+		@IStorageService protected storageService: IStorageService,
+		@IInstantiationService protected instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IContextMenuService protected contextMenuService: IContextMenuService,
+		@IExtensionService protected extensionService: IExtensionService,
+		@IWorkspaceContextService protected contextService: IWorkspaceContextService,
+		@IWorkbenchLayoutService protected layoutService: IWorkbenchLayoutService,
+		@IConfigurationService protected configurationService: IConfigurationService
 	) {
-		super(id, telemetryService, themeService, storageService);
-	}
-
-	getOptimalWidth(): number {
-		return null;
-	}
-
-	getContextMenuActions(): IAction[] {
-		const toggleSidebarPositionAction = new ToggleSidebarPositionAction(ToggleSidebarPositionAction.ID, ToggleSidebarPositionAction.getLabel(this.partService), this.partService, this.configurationService);
-		return [toggleSidebarPositionAction,
-			<IAction>{
-				id: ToggleSidebarVisibilityAction.ID,
-				label: nls.localize('compositePart.hideSideBarLabel', "Hide Side Bar"),
-				enabled: true,
-				run: () => this.partService.setSideBarHidden(true)
-			}];
+		super(id, viewPaneContainer, telemetryService, storageService, instantiationService, themeService, contextMenuService, extensionService, contextService);
+		// Only updateTitleArea for non-filter views: microsoft/vscode-remote-release#3676
+		if (!(viewPaneContainer instanceof FilterViewPaneContainer)) {
+			this._register(Event.any(viewPaneContainer.onDidAddViews, viewPaneContainer.onDidRemoveViews, viewPaneContainer.onTitleAreaUpdate)(() => {
+				// Update title area since there is no better way to update secondary actions
+				this.updateTitleArea();
+			}));
+		}
 	}
 }
 
@@ -55,19 +58,29 @@ export abstract class Viewlet extends Composite implements IViewlet {
  */
 export class ViewletDescriptor extends CompositeDescriptor<Viewlet> {
 
-	constructor(
+	static create<Services extends BrandedService[]>(
+		ctor: { new(...services: Services): Viewlet },
+		id: string,
+		name: string,
+		cssClass?: string,
+		order?: number,
+		requestedIndex?: number,
+		iconUrl?: URI
+	): ViewletDescriptor {
+
+		return new ViewletDescriptor(ctor as IConstructorSignature0<Viewlet>, id, name, cssClass, order, requestedIndex, iconUrl);
+	}
+
+	private constructor(
 		ctor: IConstructorSignature0<Viewlet>,
 		id: string,
 		name: string,
 		cssClass?: string,
 		order?: number,
-		private _iconUrl?: URI
+		requestedIndex?: number,
+		readonly iconUrl?: URI
 	) {
-		super(ctor, id, name, cssClass, order, id);
-	}
-
-	get iconUrl(): URI {
-		return this._iconUrl;
+		super(ctor, id, name, cssClass, order, requestedIndex);
 	}
 }
 
@@ -76,13 +89,19 @@ export const Extensions = {
 };
 
 export class ViewletRegistry extends CompositeRegistry<Viewlet> {
-	private defaultViewletId: string;
 
 	/**
 	 * Registers a viewlet to the platform.
 	 */
 	registerViewlet(descriptor: ViewletDescriptor): void {
 		super.registerComposite(descriptor);
+	}
+
+	/**
+	 * Deregisters a viewlet to the platform.
+	 */
+	deregisterViewlet(id: string): void {
+		super.deregisterComposite(id);
 	}
 
 	/**
@@ -99,19 +118,6 @@ export class ViewletRegistry extends CompositeRegistry<Viewlet> {
 		return this.getComposites() as ViewletDescriptor[];
 	}
 
-	/**
-	 * Sets the id of the viewlet that should open on startup by default.
-	 */
-	setDefaultViewletId(id: string): void {
-		this.defaultViewletId = id;
-	}
-
-	/**
-	 * Gets the id of the viewlet that should open on startup by default.
-	 */
-	getDefaultViewletId(): string {
-		return this.defaultViewletId;
-	}
 }
 
 Registry.add(Extensions.Viewlets, new ViewletRegistry());
@@ -120,33 +126,28 @@ Registry.add(Extensions.Viewlets, new ViewletRegistry());
  * A reusable action to show a viewlet with a specific id.
  */
 export class ShowViewletAction extends Action {
-	private viewletId: string;
 
 	constructor(
 		id: string,
 		name: string,
-		viewletId: string,
+		private readonly viewletId: string,
 		@IViewletService protected viewletService: IViewletService,
-		@IEditorGroupsService private editorGroupService: IEditorGroupsService,
-		@IPartService private partService: IPartService
+		@IEditorGroupsService private readonly editorGroupService: IEditorGroupsService,
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
 	) {
 		super(id, name);
-
-		this.viewletId = viewletId;
-		this.enabled = !!this.viewletService && !!this.editorGroupService;
 	}
 
-	run(): Thenable<any> {
+	async run(): Promise<void> {
 
 		// Pass focus to viewlet if not open or focused
 		if (this.otherViewletShowing() || !this.sidebarHasFocus()) {
-			return this.viewletService.openViewlet(this.viewletId, true);
+			await this.viewletService.openViewlet(this.viewletId, true);
+			return;
 		}
 
 		// Otherwise pass focus to editor group
 		this.editorGroupService.activeGroup.focus();
-
-		return Promise.resolve(true);
 	}
 
 	private otherViewletShowing(): boolean {
@@ -158,27 +159,18 @@ export class ShowViewletAction extends Action {
 	private sidebarHasFocus(): boolean {
 		const activeViewlet = this.viewletService.getActiveViewlet();
 		const activeElement = document.activeElement;
+		const sidebarPart = this.layoutService.getContainer(Parts.SIDEBAR_PART);
 
-		return activeViewlet && activeElement && DOM.isAncestor(activeElement, this.partService.getContainer(Parts.SIDEBAR_PART));
+		return !!(activeViewlet && activeElement && sidebarPart && DOM.isAncestor(activeElement, sidebarPart));
 	}
 }
 
-// Collapse All action
 export class CollapseAction extends Action {
-
-	constructor(viewer: ITree, enabled: boolean, clazz: string) {
-		super('workbench.action.collapse', nls.localize('collapse', "Collapse All"), clazz, enabled, (context: any) => {
-			if (viewer.getHighlight()) {
-				return Promise.resolve(null); // Global action disabled if user is in edit mode from another action
-			}
-
-			viewer.collapseAll();
-			viewer.clearSelection();
-			viewer.clearFocus();
-			viewer.domFocus();
-			viewer.focusFirst();
-
-			return Promise.resolve(null);
+	// We need a tree getter because the action is sometimes instantiated too early
+	constructor(treeGetter: () => AsyncDataTree<any, any, any> | AbstractTree<any, any, any>, enabled: boolean, clazz?: string) {
+		super('workbench.action.collapse', nls.localize('collapse', "Collapse All"), clazz, enabled, async () => {
+			const tree = treeGetter();
+			tree.collapseAll();
 		});
 	}
 }

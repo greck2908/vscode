@@ -16,8 +16,8 @@ suite('LanguageSelector', function () {
 
 	test('score, invalid selector', function () {
 		assert.equal(score({}, model.uri, model.language, true), 0);
-		assert.equal(score(undefined, model.uri, model.language, true), 0);
-		assert.equal(score(null, model.uri, model.language, true), 0);
+		assert.equal(score(undefined!, model.uri, model.language, true), 0);
+		assert.equal(score(null!, model.uri, model.language, true), 0);
 		assert.equal(score('', model.uri, model.language, true), 0);
 	});
 
@@ -102,6 +102,17 @@ suite('LanguageSelector', function () {
 			pattern: '**/*.interface.json'
 		};
 		let value = score(selector, URI.parse('file:///C:/Users/zlhe/Desktop/test.interface.json'), 'json', true);
+		assert.equal(value, 10);
+	});
+
+	test('Document selector match - platform paths #99938', function () {
+		let selector = {
+			pattern: {
+				base: '/home/user/Desktop',
+				pattern: '*.json'
+			}
+		};
+		let value = score(selector, URI.file('/home/user/Desktop/test.json'), 'json', true);
 		assert.equal(value, 10);
 	});
 });
